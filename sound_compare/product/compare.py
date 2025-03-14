@@ -15,13 +15,13 @@ import Levenshtein  # For a quickly implemented comparison
 # (would prefer cosine, this was simple to implement)
 
 from meta import get_metaphone      # grabs the metaphone table creation tool
-from cluster import grab_clusters   # 
+from cluster import grab_clusters   # grabs the clusters creation tool
 
 
 # CONNECTION TO THE MARIADB on KARDIA-VM ---------------------------------------------
 # This connection is neccesary for using the Kardia_DB table.
 # SAMPLE CODE TO HOST ON PORT 3306:
-# ssh -L 3306:localhost:3306  devel@10.5.193.178
+# ssh -L 3306:localhost:3306  {ip of the database}
 try:
   # Assumes that a connection is available to the server on local port 3306
   conn = mariadb.connect(host="127.0.0.1", port=3306, user="root", password="")
