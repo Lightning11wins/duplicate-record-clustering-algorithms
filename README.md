@@ -28,7 +28,10 @@ The current solution sorts each relevant attribute (optimized with an index). Th
   the implemetation of Metaphone which has more adequate funtionality for this project.  
 
 ## Sliding Window
-   The sliding window is essentially the way that the cosine algorithm checks for duplicates. The concept will continue to be used for this step of duplicate checking. The sliding window checks a number of sorted records below it for each record (e.g. a window of 50 records) by using the cosine algorithm and presents it as a duplicate if the cosine value is close enough to 1.0 (identical)
+   The sliding window technique is used to efficiently compare records within clusters, reducing the need for an exhaustive O(n^2) comparison.  
+Instead of comparing every record with every other record, it moves a fixed-size window across the sorted cluster, comparing only nearby entries.  
+This is useful for detecting near-duplicates using fuzzy matching techniques like Levenshtein distance, ensuring high recall while maintaining performance.  
+   The sliding window is essentially the way that the cosine algorithm checks for duplicates. The concept will continue to be used for this step of duplicate checking. The sliding window checks a number of sorted records below it for each record (e.g. a window of 50 records) by using the cosine algorithm and presents it as a duplicate if the cosine value is close enough to 1.0 (identical).
 
 ## Proposed Solution
 Our proposed solution has two parts that we would like to ideally combine, applying one of these functions to each attribute we desire to check. 
@@ -66,3 +69,9 @@ We chose to examine each person's first name, last name (surname), address, emai
 - Address: Select p_address_1, p_address_2, p_address_3, p_city, p_state_province, p_country_code, and p_postal_code from p_location. (join p_partner on p_partner_key)
 - Email: Select p_contact_info from p_location where p_contact_type = "E". (join p_partner on p_partner_key)
 - Phone Number: Select p_phone_area_city and p_contact_info from p_location where p_contact_type = "C" or p_contact_type = "P". (join p_partner on p_partner_key)
+
+
+
+The sliding window technique is used to efficiently compare records within a cluster, reducing the need for an exhaustive O(n^2) comparison.  
+Instead of comparing every record with every other record, it moves a fixed-size window across the sorted cluster, comparing only nearby entries.  
+This is useful for detecting near-duplicates using phonetic or fuzzy matching techniques like Levenshtein distance, ensuring high recall while maintaining performance.  
