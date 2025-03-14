@@ -13,19 +13,9 @@ import sys          # Library for sending accurate error codes.
 from datetime import datetime   # Grab date time for inserts.
 
 
-# CONNECTION TO THE MARIADB on KARDIA-VM ---------------------------------------------
-try:
-  # Assumes that a connection is available to the server on local port 3306
-  conn = mariadb.connect(host="127.0.0.1", port=3306, user="root", password="")
-except mariadb.Error as e:
-  print(f"Error connecting to the database: {e}")
-  sys.exit(1)
-
-# creates the cursor that we can use to sumbit queries to the MariaDB
-mycursor = conn.cursor()
-# switches to the correct database where our test data is stored
-mycursor.execute("use Kardia_DB;")
-# END CONNECTION SETUP ---------------------------------------------------------------
+# CONNECTION TO THE DATABASE SHOULD HAPPEN BETWEEN THESE LINES -----------------------
+# And a cursor should be given to the functions.
+# ------------------------------------------------------------------------------------
 
 
 
