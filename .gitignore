@@ -1,0 +1,8 @@
+
+# Ignore generated files
+*.exe
+*output*
+
+# DO NOT PUSH THE DATA SET TO A PUBLIC REPO
+dataset*
+*secret*
