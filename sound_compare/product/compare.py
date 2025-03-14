@@ -19,7 +19,7 @@ from cluster import grab_clusters   # grabs the clusters creation tool
 
 
 # CONNECTION TO THE DATABASE SHOULD HAPPEN BETWEEN THESE LINES -----------------------
-# And a cursor should be given to the outputs.
+# And a cursor should be given to the functions.
 # ------------------------------------------------------------------------------------
 
 
