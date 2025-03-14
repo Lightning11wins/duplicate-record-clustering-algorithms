@@ -24,4 +24,4 @@ $(EXE): $(SRC)
 	$(CC) $(CFLAGS) -o $(EXE) $(SRC)
 
 clean:
-	rm -f $(EXE)
+	rm -f $(EXE) $(OUT)
