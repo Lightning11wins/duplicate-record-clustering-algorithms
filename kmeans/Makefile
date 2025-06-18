@@ -1,27 +1,34 @@
 CC = gcc
 VISFLAGS = -I/usr/include/cairo -lgsl -lgslcblas -lcairo 
-CFLAGS = -lm -Wall -Wextra -O3
+CFLAGS = -Wall -Wextra -Wfloat-equal -Wundef -Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 -Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code -Wformat=2 -lm -O3
+UFLAGS = -Wshadow
 
 NAME = kmeans
-EXE = $(NAME).exe
+EXE = $(NAME).o
 SRC = $(NAME).c
 OUT = output.txt
 
-.PHONY: all run debug valgrind clean
+.PHONY: all rerun rebuild build clean run debug valgrind
 
-all: $(EXE)
+all: build
+
+rerun: clean run
+
+rebuild: clean build
+
+build: $(EXE)
+
+clean:
+	rm -f $(EXE) $(OUT)
 
 run: $(EXE)
 	./$(EXE) > $(OUT)
 
 debug: $(EXE)
 	gdb ./$(EXE)
-		
+
 valgrind: $(EXE)
 	valgrind ./$(EXE)
 
 $(EXE): $(SRC)
-	$(CC) $(CFLAGS) -o $(EXE) $(SRC)
-
-clean:
-	rm -f $(EXE) $(OUT)
+	$(CC) -o $(EXE) $(SRC) $(CFLAGS)

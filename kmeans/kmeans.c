@@ -170,8 +170,8 @@ static inline int exp_fn_i_frequency_table(double* table, char* term) {
 static inline void check(const int result, const char* functionName) {
     if (result != 0) { // An error occured.
         // Create the most descriptive error message we can.
-        char errorBuffer[1024];
-        sprintf(errorBuffer, "kmeans.c: Fail - %s", functionName);
+        char errorBuffer[BUFSIZ];
+        snprintf(errorBuffer, sizeof(errorBuffer), "kmeans.c: Fail - %s", functionName);
         perror(errorBuffer);
 
         // Exit repeatedly until it works, in case exit gets interupted somehow.
@@ -188,7 +188,7 @@ static inline void check(const int result, const char* functionName) {
  * Returns:
  * 	A pointer to the new vector (double*).
  */
-static inline double* create_vector() {
+static inline double* create_vector(void) {
     double* vector = malloc(NUM_DIMS * sizeof(double));
     if (vector == NULL) {
         perror("Memory allocation failed.\n");
@@ -453,10 +453,12 @@ static inline void kmeans(double** vectors, int num_vectors, int* labels, double
     }
 }
 
-static inline void load_dataset() {
+static inline void load_dataset(void) {
     FILE *file = fopen(DATASET_PATH, "r");
     if (!file) {
-        perror("Failed to open file");
+        char errorBuffer[BUFSIZ];
+        snprintf(errorBuffer, sizeof(errorBuffer), "Failed to open file: %s", DATASET_PATH);
+        perror(errorBuffer);
         exit(EXIT_FAILURE);
     }
 
@@ -466,7 +468,9 @@ static inline void load_dataset() {
     fclose(file);
     
     if (len == -1) {
-        perror("Failed to read file");
+        char errorBuffer[BUFSIZ];
+        snprintf(errorBuffer, sizeof(errorBuffer), "Failed to read file: %s", DATASET_PATH);
+        perror(errorBuffer);
         exit(EXIT_FAILURE);
     }
 
@@ -480,7 +484,7 @@ static inline void load_dataset() {
     free(buffer);
 }
 
-int main() {
+int main(void) {
     // Set stdout to only flush manually with a 64MB buffer.
     setvbuf(stdout, NULL, _IOFBF, BUFFER_SIZE);
 

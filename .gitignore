@@ -1,6 +1,8 @@
 
 # Ignore generated files
+*.o
 *.exe
+*.out
 *output*
 
 # DO NOT PUSH THE DATA SET TO A PUBLIC REPO
