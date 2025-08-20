@@ -1,14 +1,19 @@
 CC = gcc
 VISFLAGS = -I/usr/include/cairo -lgsl -lgslcblas -lcairo 
-CFLAGS = -Wall -Wextra -Wfloat-equal -Wundef -Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 -Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code -Wformat=2 -lm -O3
+CFLAGS_ALL = -Wall -Wextra -Wfloat-equal -Wundef -Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 -Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code -Wformat=2 -lm
+CFLAGS_FAST = $(CFLAGS_ALL) -O3
+CFLAGS_DEBUG = $(CFLAGS_ALL) -g -O0
 UFLAGS = -Wshadow
 
 NAME = kmeans
-EXE = $(NAME).o
+DIR = bin
+BIN_FAST = $(DIR)/$(NAME)_fast.o
+BIN_DEBUG = $(DIR)/$(NAME)_debug.o
 SRC = $(NAME).c
+ASM = $(NAME).asm
 OUT = output.txt
 
-.PHONY: all rerun rebuild build clean run debug valgrind
+.PHONY: all rerun rebuild build clean run debug valgrind asm
 
 all: build
 
@@ -16,19 +21,31 @@ rerun: clean run
 
 rebuild: clean build
 
-build: $(EXE)
+build: $(DIR) $(BIN_FAST) $(BIN_DEBUG)
 
 clean:
-	rm -f $(EXE) $(OUT)
+	rm -rf $(DIR)
+	rm -f $(BIN_FAST) $(BIN_DEBUG) $(OUT) $(ASM) .gdb_history
 
-run: $(EXE)
-	./$(EXE) > $(OUT)
+run: $(DIR) $(BIN_FAST)
+	./$(BIN_FAST) > $(OUT)
 
-debug: $(EXE)
-	gdb ./$(EXE)
+debug: $(DIR) $(BIN_DEBUG)
+	gdb ./$(BIN_DEBUG)
 
-valgrind: $(EXE)
-	valgrind ./$(EXE)
+valgrind: $(DIR) $(BIN_DEBUG)
+	valgrind ./$(BIN_DEBUG)
 
-$(EXE): $(SRC)
-	$(CC) -o $(EXE) $(SRC) $(CFLAGS)
+$(DIR):
+	mkdir $(DIR)
+
+asm: $(ASM)
+
+$(ASM): $(SRC)
+	$(CC) -s -o $(ASM) $(SRC) $(CFLAGS_DEBUG)
+
+$(BIN_DEBUG): $(SRC)
+	$(CC) -o $(BIN_DEBUG) $(SRC) $(CFLAGS_DEBUG)
+
+$(BIN_FAST): $(SRC)
+	$(CC) -o $(BIN_FAST) $(SRC) $(CFLAGS_FAST)
