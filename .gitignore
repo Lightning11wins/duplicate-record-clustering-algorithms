@@ -6,6 +6,7 @@
 *.exe
 *.out
 *output*
+out_*
 kmeans.bin
 kmeans.s
 kmeans.asm

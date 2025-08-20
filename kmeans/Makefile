@@ -11,7 +11,11 @@ BIN_FAST = $(DIR)/$(NAME)_fast.o
 BIN_DEBUG = $(DIR)/$(NAME)_debug.o
 SRC = $(NAME).c
 ASM = $(NAME).asm
-OUT = output.txt
+OUT = out_std.txt
+OUT_COMPLETE = out_complete.css
+OUT_CURRENT = out_current.css
+OUT_KMEANS = out_kmeans.css
+CMD_ARGS = $(OUT_COMPLETE) $(OUT_CURRENT) $(OUT_KMEANS)
 
 .PHONY: all rerun rebuild build clean run debug valgrind asm
 
@@ -25,21 +29,21 @@ build: $(DIR) $(BIN_FAST)
 
 clean:
 	rm -rf $(DIR)
-	rm -f $(BIN_FAST) $(BIN_DEBUG) $(OUT) $(ASM) .gdb_history
+	rm -f $(BIN_FAST) $(BIN_DEBUG) $(ASM) $(OUT) $(OUT_COMPLETE) $(OUT_CURRENT) $(OUT_KMEANS) .gdb_history
 
 run: $(DIR) $(BIN_FAST)
-	./$(BIN_FAST) > $(OUT)
+	./$(BIN_FAST) $(CMD_ARGS) > $(OUT)
 
 debug: $(DIR) $(BIN_DEBUG)
-	gdb ./$(BIN_DEBUG)
+	gdb --args ./$(BIN_DEBUG) $(CMD_ARGS)
 
 valgrind: $(DIR) $(BIN_DEBUG)
-	valgrind ./$(BIN_DEBUG)
+	valgrind ./$(BIN_DEBUG) $(CMD_ARGS)
 
 asm: $(ASM)
 
 $(ASM): $(SRC)
-	$(CC) -s -o $(ASM) $(SRC) $(CFLAGS_DEBUG)
+	$(CC) -S -o $(ASM) $(SRC) $(CFLAGS_FAST)
 
 $(BIN_DEBUG): $(SRC)
 	$(CC) -o $(BIN_DEBUG) $(SRC) $(CFLAGS_DEBUG)
