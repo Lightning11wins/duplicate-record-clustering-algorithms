@@ -5,15 +5,34 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define DATASET_PATH "dataset.txt" // Path to the dataset.
-#define MAX_ITER 16                // Maximum iterations.
+#define MAX_ITER 8                 // Maximum iterations.
 #define NUM_CLUSTERS 64            // Number of clusters (K).
 #define NUM_DIMS 251               // The number of dimentions used for clustering data.
 #define NUM_VECTORS 1975           // The number of strings in the test dataset.
 #define SEED 0                     // The seed used for randomly selecting centroids.
+#define THRESHOLD 0.75
 
 char* dataset[NUM_VECTORS];
+FILE* complete_file = NULL;
+FILE* current_file = NULL;
+FILE* kmeans_file = NULL;
+
+// Timer code
+#define duration(start, end) ((end) - (start))
+#define init_timer() double timer_start = -1, timer_end = -1
+#define start_timer() timer_start = monotonic_seconds()
+#define stop_timer() timer_end = monotonic_seconds()
+#define print_timer(name) print_time(name, duration(timer_start, timer_end))
+#define print_time(name, seconds) printf("\n%s time: %0.04fs\n", name, seconds);
+
+static double monotonic_seconds(void) {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
 
 // Things to fix:
 // Optimize Data Conversions
@@ -54,7 +73,7 @@ static int exp_fn_i_hash_char_pair(double num1, double num2) {
  * 
  * LINK ../../centrallix-sysdoc/string_comparison.md#exp_fn_i_dot_product
  */
-static int exp_fn_i_dot_product(double* dot_product_ptr, double* r_freq_table1, double* r_freq_table2) {
+static int exp_fn_i_dot_product(double* dot_product_ptr, const double* r_freq_table1, const double* r_freq_table2) {
 	double dot_product = *dot_product_ptr;
 	for (int i = 0; i < NUM_DIMS; i++) {
 		dot_product += r_freq_table1[i] * r_freq_table2[i];
@@ -74,7 +93,7 @@ static int exp_fn_i_dot_product(double* dot_product_ptr, double* r_freq_table1, 
  * 
  * LINK ../../centrallix-sysdoc/string_comparison.md#exp_fn_i_magnitude
  */
-static int exp_fn_i_magnitude(double* magnitude_ptr, double* r_freq_table) {
+static int exp_fn_i_magnitude(double* magnitude_ptr, const double* r_freq_table) {
 	double magnitude = *magnitude_ptr;
 	for (int i = 0; i < NUM_DIMS; i++) {
 		magnitude += r_freq_table[i] * r_freq_table[i];
@@ -121,8 +140,8 @@ static int exp_fn_i_frequency_table(double* table, char* term) {
 		int index = exp_fn_i_hash_char_pair(temp1, temp2);
 		
 		// Increment Frequency Table value by number from 1 to 13
-		// table[index] += ((int)temp1 + (int)temp2) % 13 + 1;
-		table[index] += 1;
+		table[index] += ((int)temp1 + (int)temp2) % 13 + 1;
+		// table[index] += 1;
 	}
 
 	return 0;
@@ -189,7 +208,7 @@ static int build_vectors(double** vectors, char** strs, size_t num_vectors) {
  *** @returns {0 - 1} where 0 indicates that the vectors (and the strings they
  ***          represent) have no similarity and 1 indicates that they are identical.
  ***/
-static double similarity(double* v1, double* v2) {
+static double similarity(const double* v1, const double* v2) {
 	// Calculate dot product
 	double dot_product = 0;
 	check(exp_fn_i_dot_product(&dot_product, v1, v2), "exp_fn_i_dot_product");
@@ -231,7 +250,7 @@ static double similarity(double* v1, double* v2) {
  *** @param centroids The locations of the centroids.
  *** @returns 0, success
  ***/
-static double average_cluster_size(double** vectors, int num_vectors, int* labels, double** centroids) {
+static int print_cluster_size(double** vectors, int num_vectors, int* labels, double** centroids, int iteration) {
 	double cluster_sums[NUM_CLUSTERS] = {0};
 	double noncluster_sums[NUM_CLUSTERS] = {0};
 	int cluster_counts[NUM_CLUSTERS] = {0};
@@ -250,25 +269,56 @@ static double average_cluster_size(double** vectors, int num_vectors, int* label
 	}
 	
 	// Calculate the average difference per cluster and then the overall average.
-	double overall_avg = 0.0;
+	fprintf(kmeans_file, "\nCluster Sizes:\n");
 	int valid_clusters = 0;
+	double cluster_total = 0.0, noncluster_total = 0.0;
+	double max_cluster_size = 0.0, min_cluster_size = 1.0;
+	int max_cluster_label = -1, min_cluster_label = -1;
 	for (int label = 0; label < NUM_CLUSTERS; label++) {
 		int cluster_count = cluster_counts[label];
 		if (cluster_count > 0) {
 			double cluster_size = cluster_sums[label] / cluster_count;
 			double noncluster_size = noncluster_sums[label] / (num_vectors - cluster_count);
-			overall_avg += cluster_size;
+			cluster_total += cluster_size;
+			noncluster_total += noncluster_size;
 			valid_clusters++;
 			
-			printf(
+			if (cluster_size > max_cluster_size) {
+				max_cluster_size = cluster_size;
+				max_cluster_label = label;
+			}
+			if (cluster_size < min_cluster_size) {
+				min_cluster_size = cluster_size;
+				min_cluster_label = label;
+			}
+			
+			fprintf(kmeans_file,
 				"> Cluster #%d (x%d): %.4lf (vs. %.4lf).\n",
 				label, cluster_count, cluster_size, noncluster_size
 			); // Debug
 		}
 	}
 	
-	// If no clusters have any points, return 0.
-	return (valid_clusters > 0) ? (overall_avg / valid_clusters) : 0.0;
+	// Final print
+	if (valid_clusters > 0) {
+		double average_cluster_size = cluster_total / valid_clusters;
+		double average_noncluster_size = noncluster_total / valid_clusters;
+		
+		printf(
+			"\nkmeans #%d:\n"
+				"\t> Average cluster: %.4lf\n"
+				"\t> Average noncluster: %.4lf\n"
+				"\t> Largest cluster: #%d @ %.4lf\n"
+				"\t> Smallest cluster: #%d @ %.4lf\n",
+			iteration,
+			average_cluster_size,
+			average_noncluster_size,
+			max_cluster_label, max_cluster_size,
+			min_cluster_label, min_cluster_size
+		);
+	} else printf("kmeans #%d: No valid clusters!\n", iteration);
+	
+	return 0;
 }
 
 /*** Executes the k-means clustering algorithm. Selects NUM_CLUSTERS random
@@ -300,25 +350,24 @@ static void kmeans(double** vectors, int num_vectors, int* labels, double** cent
 	for (int i = 0; i < NUM_CLUSTERS; i++) {
 		// Pick a random vector.
 		const int random_index = rand() % num_vectors;
-		printf("Centroid %d starts at vector %d.\n", i, random_index); // Debug
+		fprintf(kmeans_file, "Centroid %d starts at vector %d.\n", i, random_index); // Debug
 		
 		// Copy each dimetion from the selected random vector to the current centroid.
 		for (int dim = 0; dim < NUM_DIMS; dim++) {
 			centroids[i][dim] = vectors[random_index][dim];
 		}
 		
-		print_difference(vectors, 0, random_index); // Debug
+		// print_difference(vectors, 0, random_index); // Debug
 	}
-	printf("\n"); // Debug
 	
 	// Allocate memory for new centroids
-	double** new_centroids = (double**) malloc(NUM_CLUSTERS * sizeof(double*));
+	double** new_centroids = malloc(NUM_CLUSTERS * sizeof(double*));
 	for (int i = 0; i < NUM_CLUSTERS; i++) {
 		new_centroids[i] = create_vector();
 	}
 	
 	// Main loop
-	int* cluster_sizes = (int*) malloc(NUM_CLUSTERS * sizeof(int));
+	int* cluster_sizes = malloc(NUM_CLUSTERS * sizeof(int));
 	for (int i = 0; i < MAX_ITER; i++) {
 		bool changed = false;
 		
@@ -366,8 +415,7 @@ static void kmeans(double** vectors, int num_vectors, int* labels, double** cent
 			}
 		}
 		
-		printf("Average cluster size is %.6lf.\n\n", average_cluster_size(vectors, num_vectors, labels, centroids));
-		check(fflush(stdout), "fflush");
+		print_cluster_size(vectors, num_vectors, labels, centroids, i);
 		
 		// Stop if centroids didn't change.
 		if (!changed) break;
@@ -421,12 +469,25 @@ static void load_dataset(void) {
 	free(buffer);
 }
 
-int main(void) {
-	// Set stdout to only flush manually with a 8MB buffer.
-	setvbuf(stdout, NULL, _IOFBF, (8 * 1000 * 1000));
+int main(int argc, char* argv[]) {
+	if (argc != 4) {
+		fprintf(stderr, "Usage: %s <complete_file_name> <current_file_name> <kmeans_file_name>\n", argv[0]);
+		return 1;
+	}
+	complete_file = fopen(argv[1] ,"w");
+	current_file = fopen(argv[2] ,"w");
+	kmeans_file = fopen(argv[3] ,"w");
+	
+	// Set buffers to only flush manually for more accurate performance evaluation.
+	setvbuf(stdout, NULL, _IOFBF, (4 * 1000 * 1000));
+	setvbuf(kmeans_file, NULL, _IOFBF, (4 * 1000 * 1000));
+	printf("Begin!\n");
 	
 	// Load the dataset from the .gitignored dataset file.
 	load_dataset();
+	
+	// Setup timer.
+	init_timer();
 	
 	// Allocate ram to store vectors.
 	double** vectors = malloc(NUM_VECTORS * sizeof(double*));
@@ -434,9 +495,34 @@ int main(void) {
 	// Build the vectors.
 	check(build_vectors(vectors, dataset, NUM_VECTORS), "build_vectors");
 	
-	// Debug printing to test that difference is working.
-	print_difference(vectors, 0, 1);
-	printf("\n");
+	// Execute the complete solution.
+	int* dups_complete = malloc(NUM_VECTORS * NUM_VECTORS * 2 * sizeof(int));
+	start_timer();
+	int idx = 0;
+	for (int i = 0; i < NUM_VECTORS; i++) {
+		const double* v1 = vectors[i];
+		for (int j = i; j < NUM_VECTORS; j++) {
+			const double* v2 = vectors[j];
+			if (similarity(v1, v2) > THRESHOLD) {
+				dups_complete[idx++] = i;
+				dups_complete[idx++] = j;
+			}
+		}
+	}
+	stop_timer();
+	print_timer("Complete similarity");
+	printf("Complete search found %d dups.\n", idx);
+	check(fflush(stdout), "fflush(stdout)");
+	
+	// Log duplocates found by the complete strategy.
+	fprintf(complete_file, "Duplocates found:\n");
+	for (int i = 0; i < idx;) {
+		int d1 = dups_complete[i++], d2 = dups_complete[i++];
+		fprintf(complete_file, "%s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
+	}
+	
+	// Start kmeans clustering timer.
+	start_timer();
 	
 	// Allocate memory for clustering.
 	int* labels = malloc(NUM_VECTORS * sizeof(int));
@@ -445,39 +531,50 @@ int main(void) {
 		centroids[i] = malloc(NUM_DIMS * sizeof(double));
 	}
 	
-	// Run the clustering algorithm.
+	// Execute kmeans clustering.
 	kmeans(vectors, NUM_VECTORS, labels, centroids);
 	
-	// Print results.
-	printf("\nCluster Assignments:\n");
-	for (int i = 0; i < NUM_VECTORS; i++) {
-		printf("Point %d (in %d): %s\n", i, labels[i], dataset[i]);
-	}
+	// Stop kmeans clustering timer.
+	stop_timer();
+	print_timer("kmeans clustering");
+	check(fflush(stdout), "fflush(stdout)");
 	
-	// Print results grouped by cluster.
-	printf("\nPoints By Cluster Assignment:\n");
+	// Print results.
+	// printf("\nCluster Assignments:\n");
+	// for (int i = 0; i < NUM_VECTORS; i++) {
+	// 	printf("Point %d (in %d): %s\n", i, labels[i], dataset[i]);
+	// }
+	
+	// Print kmeans results.
+	fprintf(kmeans_file, "\nPoints By Cluster Assignment:\n");
 	for (int cluster = 0; cluster < NUM_CLUSTERS; cluster++) {
-		printf("Cluster %d: ", cluster);
+		fprintf(kmeans_file, "Cluster %d: ", cluster);
 		for (int i = 0; i < NUM_VECTORS; i++) {
 			if (labels[i] == cluster) {
-				printf("%s,", dataset[i]);
+				fprintf(kmeans_file, "%s, ", dataset[i]);
 			}
 		}
-		printf("\n");
+		fprintf(kmeans_file, "\n");
 	}
 	
-	printf("\nFinal Centroids:\n");
+	fprintf(kmeans_file, "\nFinal Centroids:\n");
 	for (int j = 0; j < NUM_CLUSTERS; j++) {
-		printf("Cluster %d: (", j);
+		fprintf(kmeans_file, "Cluster %d: (", j);
+		int skips = 0;
 		for (int dim = 0; dim < NUM_DIMS; dim++) {
-			printf("%.8lf", centroids[j][dim]);
-			if (dim < NUM_DIMS - 1) printf(", ");
+			double val = centroids[j][dim];
+			if (val <= 0) { skips++; continue; }
+			if (skips > 0) { fprintf(kmeans_file, "0x%d,", skips); skips = 0; }
+			fprintf(kmeans_file, "%.3lfe-12", val * 1000 * 1000 * 1000 * 1000);
+			if (dim < NUM_DIMS - 1) fprintf(kmeans_file, ",");
 		}
-		printf(")\n");
+		fprintf(kmeans_file, ")\n");
 	}
 	
-	printf("Done!\n");
-	check(fflush(stdout), "fflush");
+	// End program and flush all buffers.
+	printf("\nDone!\n");
+	check(fflush(stdout), "fflush(stdout)");
+	check(fflush(kmeans_file), "fflush(kmeans_file)");
 	
 	return 0;
 }
