@@ -1,9 +1,15 @@
 
 # Ignore generated files
+*/bin
+*/bin/*
 *.o
 *.exe
 *.out
 *output*
+kmeans.bin
+kmeans.s
+kmeans.asm
+.gdb_history
 
 # DO NOT PUSH THE DATA SET TO A PUBLIC REPO
 dataset*
