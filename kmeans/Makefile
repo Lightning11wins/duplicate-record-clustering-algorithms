@@ -21,7 +21,7 @@ rerun: clean run
 
 rebuild: clean build
 
-build: $(DIR) $(BIN_FAST) $(BIN_DEBUG)
+build: $(DIR) $(BIN_FAST)
 
 clean:
 	rm -rf $(DIR)
@@ -36,9 +36,6 @@ debug: $(DIR) $(BIN_DEBUG)
 valgrind: $(DIR) $(BIN_DEBUG)
 	valgrind ./$(BIN_DEBUG)
 
-$(DIR):
-	mkdir $(DIR)
-
 asm: $(ASM)
 
 $(ASM): $(SRC)
@@ -49,3 +46,6 @@ $(BIN_DEBUG): $(SRC)
 
 $(BIN_FAST): $(SRC)
 	$(CC) -o $(BIN_FAST) $(SRC) $(CFLAGS_FAST)
+
+$(DIR):
+	mkdir $(DIR)
