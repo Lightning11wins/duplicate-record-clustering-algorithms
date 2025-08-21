@@ -146,12 +146,12 @@ static int exp_fn_i_frequency_table(double* table, char* term) {
 	
 	// j is the former character, i is the latter.
 	int num_terms = (int)strlen(term);
-	for (int j = -1, i = 0; i <= num_terms; j = i++) {
-		// If latter character is punctuation or whitespace, skip it
+	for (int j = -1, i = 0; i <= num_terms; i++) {
+		// If latter character is punctuation or whitespace, skip it.
 		if (ispunct(term[i]) || isspace(term[i])) continue;
 
-		double temp1 = (j == -1) ? '`' : (int)tolower(term[j]);
-		double temp2 = (i == num_terms) ? '`' : (int)tolower(term[i]);
+		int temp1 = (j == -1) ? '`' : (int)tolower(term[j]);
+		int temp2 = (i == num_terms) ? '`' : (int)tolower(term[i]);
 
 		// If either character is a number, reassign the code point
 		// The significance of 75 here seems to be that it puts the numbers
@@ -160,12 +160,14 @@ static int exp_fn_i_frequency_table(double* table, char* term) {
 		if ('0' <= temp1 && temp1 <= '9') temp1 += 75;
 		if ('0' <= temp2 && temp2 <= '9') temp2 += 75;
 		
-		// Hash the character pair into an index
+		// Hash the character pair into an index.
 		int index = exp_fn_i_hash_char_pair(temp1, temp2);
 		
-		// Increment Frequency Table value by number from 1 to 13
-		table[index] += ((int)temp1 + (int)temp2) % 13 + 1;
+		// Increment Frequency Table value by number from 1 to 13.
+		table[index] += (temp1 + temp2) % 13 + 1;
 		// table[index] += 1;
+		
+		j = i;
 	}
 
 	return 0;
