@@ -2,14 +2,15 @@
 # Ignore generated files
 */bin
 */bin/*
-*.o
+*.bin
 *.exe
+*.o
+*.s
+*.asm
 *.out
 *output*
 out_*
-kmeans.bin
-kmeans.s
-kmeans.asm
+out
 .gdb_history
 
 # DO NOT PUSH THE DATA SET TO A PUBLIC REPO
