@@ -29,19 +29,19 @@ rerun: clean run
 
 rebuild: clean build
 
-build: $(DIR) $(BIN_FAST)
+build: $(BUILD_DIR) $(BIN_FAST)
 
 clean:
-	rm -rf $(DIR)
+	rm -rf $(BUILD_DIR)
 	rm -f $(BIN_FAST) $(BIN_DEBUG) $(ASM) $(OUT) $(OUT_COMPLETE) $(OUT_SLIDING) $(OUT_KMEANS) .gdb_history
 
-run: $(DIR) $(BIN_FAST)
+run: $(BUILD_DIR) $(BIN_FAST)
 	./$(BIN_FAST) $(CMD_ARGS) > $(OUT)
 
-debug: $(DIR) $(BIN_DEBUG)
+debug: $(BUILD_DIR) $(BIN_DEBUG)
 	gdb --args ./$(BIN_DEBUG) $(CMD_ARGS)
 
-valgrind: $(DIR) $(BIN_DEBUG)
+valgrind: $(BUILD_DIR) $(BIN_DEBUG)
 	valgrind ./$(BIN_DEBUG) $(CMD_ARGS)
 
 asm: $(ASM)
@@ -61,5 +61,5 @@ $(ARR_DEBUG): $(ARR_SRC)
 $(ARR_FAST): $(ARR_SRC)
 	$(CC) -o $(ARR_FAST) -c $(ARR_SRC) $(CFLAGS_FAST)
 
-$(DIR):
-	mkdir $(DIR)
+$(BUILD_DIR):
+	mkdir $(BUILD_DIR)
