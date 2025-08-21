@@ -8,6 +8,7 @@ UFLAGS = -Wshadow
 NAME = kmeans
 BUILD_DIR = bin
 LIB_DIR = lib
+OUT_DIR = out
 ARR_DEBUG = $(BUILD_DIR)/arraylist_debug.o
 ARR_FAST = $(BUILD_DIR)/arraylist_fast.o
 ARR_SRC = $(LIB_DIR)/arraylist.c
@@ -15,10 +16,10 @@ BIN_DEBUG = $(BUILD_DIR)/$(NAME)_debug.o
 BIN_FAST = $(BUILD_DIR)/$(NAME)_fast.o
 SRC = $(NAME).c
 ASM = $(NAME).asm
-OUT = out_std.txt
-OUT_COMPLETE = out_complete.txt
-OUT_SLIDING = out_sliding.txt
-OUT_KMEANS = out_kmeans.css
+OUT = $(OUT_DIR)/std.txt
+OUT_COMPLETE = $(OUT_DIR)/complete.txt
+OUT_SLIDING = $(OUT_DIR)/sliding.txt
+OUT_KMEANS = $(OUT_DIR)/kmeans.css
 CMD_ARGS = $(OUT_COMPLETE) $(OUT_SLIDING) $(OUT_KMEANS)
 
 .PHONY: all rerun rebuild build clean run debug valgrind asm
@@ -32,16 +33,16 @@ rebuild: clean build
 build: $(BUILD_DIR) $(BIN_FAST)
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) $(OUT_DIR)
 	rm -f $(BIN_FAST) $(BIN_DEBUG) $(ASM) $(OUT) $(OUT_COMPLETE) $(OUT_SLIDING) $(OUT_KMEANS) .gdb_history
 
-run: $(BUILD_DIR) $(BIN_FAST)
+run: $(BUILD_DIR) $(OUT_DIR) $(BIN_FAST)
 	./$(BIN_FAST) $(CMD_ARGS) > $(OUT)
 
-debug: $(BUILD_DIR) $(BIN_DEBUG)
+debug: $(BUILD_DIR) $(OUT_DIR) $(BIN_DEBUG)
 	gdb --args ./$(BIN_DEBUG) $(CMD_ARGS)
 
-valgrind: $(BUILD_DIR) $(BIN_DEBUG)
+valgrind: $(BUILD_DIR) $(OUT_DIR) $(BIN_DEBUG)
 	valgrind ./$(BIN_DEBUG) $(CMD_ARGS)
 
 asm: $(ASM)
@@ -63,3 +64,6 @@ $(ARR_FAST): $(ARR_SRC)
 
 $(BUILD_DIR):
 	mkdir $(BUILD_DIR)
+
+$(OUT_DIR):
+	mkdir $(OUT_DIR)
