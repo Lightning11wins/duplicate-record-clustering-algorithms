@@ -12,9 +12,9 @@
 #define DATASET_PATH "dataset_unique_sorted.txt"
 #define DATASET_SIZE 1257 // 1975
 
-#define MAX_ITER 8                 // Maximum iterations.
+#define MAX_ITER 16                 // Maximum iterations.
 #define NUM_CLUSTERS 64            // Number of clusters (K).
-#define NUM_DIMS 251               // The number of dimentions used for clustering data.
+#define NUM_DIMS 251               // The number of dimensions used for clustering data.
 #define NUM_VECTORS DATASET_SIZE   // The number of strings in the test dataset.
 #define SEED 0                     // The seed used for randomly selecting centroids.
 #define THRESHOLD 0.75
@@ -221,11 +221,11 @@ static int build_vectors(double** vectors, char** strs, size_t num_vectors) {
 }
 
 /*** Calculates the cosine similarity, aka. the angle between the two
- *** vectors in n dimentional space (where n is NUM_DIMS). In other words,
+ *** vectors in n dimensional space (where n is NUM_DIMS). In other words,
  *** `similarity(A, B)` performs the function `cos(θ) = (A. B)/(|A| |B|)`
  *** where A and B are vectors.
  ***
- *** Assumes all dimentions of both parameters are assumed to be strictly positive.
+ *** Assumes all dimensions of both parameters are assumed to be strictly positive.
  ***
  *** @param v1 The first vector being compared.
  *** @param v2 The second vector being compared.
@@ -250,7 +250,7 @@ static double similarity(const double* v1, const double* v2) {
 /*** Inverts the cosine similarity such that more similar vectors produce a
  *** smaller value instead of a larger value.
  ***
- *** Assumes all dimentions of both parameters are assumed to be strictly positive.
+ *** Assumes all dimensions of both parameters are assumed to be strictly positive.
  ***
  *** @param v1 The first vector being compared.
  *** @param v2 The second vector being compared.
