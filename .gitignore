@@ -14,6 +14,7 @@ out
 .gdb_history
 
 # DO NOT PUSH THE DATA SET TO A PUBLIC REPO
-dataset*
+*dataset*
+*test*data*
 *secret*
 *.csv
