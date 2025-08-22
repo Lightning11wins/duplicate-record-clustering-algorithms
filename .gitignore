@@ -11,6 +11,7 @@
 *output*
 out_*
 out
+*_pre.c
 .gdb_history
 
 # DO NOT PUSH THE DATA SET TO A PUBLIC REPO

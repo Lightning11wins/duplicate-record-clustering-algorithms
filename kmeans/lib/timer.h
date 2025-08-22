@@ -20,4 +20,6 @@ void timer_print(const Timer* timer, const char* name);
 void timer_print_cmp(const Timer* timer, const char* name);
 void timer_print_var(const Timer* timer, const char* name, bool do_cmp);
 
+#define timer_benchmark(timer, code) timer_start(timer); code timer_stop(timer)
+
 #endif // TIMER_H
