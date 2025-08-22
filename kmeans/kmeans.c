@@ -11,7 +11,7 @@
 #include "lib/timer.h"
 
 // Define the dataset.
-#define DATASET_PATH "dataset_unique_sorted.txt"
+#define DATASET_PATH "datasets/dataset_unique_sorted.txt"
 #define DATASET_SIZE 1257 // 1975
 
 #define NUM_DIMS 251               // The number of dimensions used for clustering data.

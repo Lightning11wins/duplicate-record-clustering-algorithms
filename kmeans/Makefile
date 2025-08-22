@@ -9,6 +9,7 @@ NAME = kmeans
 BUILD_DIR = bin
 LIB_DIR = lib
 OUT_DIR = out
+DATA_DIR = datasets
 LIBS = arraylist timer
 LIBOS = $(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(LIBS)))
 BIN_DEBUG = $(BUILD_DIR)/$(NAME)_debug.o
@@ -63,3 +64,6 @@ $(BUILD_DIR):
 
 $(OUT_DIR):
 	mkdir $(OUT_DIR)
+
+$(DATA_DIR):
+	mkdir $(DATA_DIR)
