@@ -19,7 +19,7 @@ Timer* timer_init(Timer* timer) {
 }
 
 Timer* timer_new(void) {
-	Timer* timer = (Timer*)malloc(sizeof(Timer));
+	Timer* timer = malloc(sizeof(Timer));
 	timer_init(timer);
 	return timer;
 }

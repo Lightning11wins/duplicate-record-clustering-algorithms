@@ -10,7 +10,7 @@ ArrayList* al_init(ArrayList* list) {
 ArrayList* al_initc(ArrayList* list, size_t initialCapacity) {
 	if (!list) return list;
 
-	list->data = (int*)malloc(initialCapacity * sizeof(int));
+	list->data = malloc(initialCapacity * sizeof(int));
 	if (list->data == NULL) {
 		free(list);
 		return NULL;
@@ -26,7 +26,7 @@ ArrayList* al_new(void) {
 }
 
 ArrayList* al_newc(size_t initialCapacity) {
-	ArrayList* list = (ArrayList*)malloc(sizeof(ArrayList));
+	ArrayList* list = malloc(sizeof(ArrayList));
 	al_initc(list, initialCapacity);
 	return list;
 }
