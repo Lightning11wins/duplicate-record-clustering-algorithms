@@ -239,11 +239,11 @@ double similarity(const double* v1, const double* v2) {
 #define difference(v1, v2) (1.0 - similarity((v1), (v2)))
 
 // Debug helper function to print differences.
-#define print_difference(vectors, i1, i2)                              \
-	printf(                                                            \
-		"Difference from '%s' to '%s': %lf\n",                         \
-		dataset[i1], dataset[i2], difference(vectors[i1], vectors[i2]) \
-	); // Debug
+// #define print_difference(vectors, i1, i2, dataset)                     \
+// 	printf(                                                            \
+// 		"Difference from '%s' to '%s': %lf\n",                         \
+// 		dataset[i1], dataset[i2], difference(vectors[i1], vectors[i2]) \
+// 	); // Debug
 
 /*** Calculate the average size of all clusters in a set of vectors.
  ***
@@ -741,9 +741,9 @@ int main(int argc, char* argv[]) {
 	printf("\n");
 	check(fflush(stdout), "fflush(stdout)");
 	Timer* timer = timer_new();
-	timer_start(timer);
-	ArrayList* complete_dups = find_complete_dups(vectors);
-	timer_stop(timer);
+	timer_benchmark(timer,
+		ArrayList* complete_dups = find_complete_dups(vectors);
+	);
 	timer_store(timer);
 	
 	// Print complete summary.
@@ -754,9 +754,9 @@ int main(int argc, char* argv[]) {
 	// Execute current (sliding window).
 	printf("\n");
 	check(fflush(stdout), "fflush(stdout)");
-	timer_start(timer);
-	ArrayList* sliding_dups = find_sliding_dups(vectors, 6, complete_dups);
-	timer_stop(timer);
+	timer_benchmark(timer,
+		ArrayList* sliding_dups = find_sliding_dups(vectors, 6, complete_dups);
+	);
 	
 	// Print sliding summary.
 	timer_print_cmp(timer, "Sliding similarity");
@@ -770,12 +770,12 @@ int main(int argc, char* argv[]) {
 	// Execute kmeans clustering.
 	printf("\n");
 	check(fflush(stdout), "fflush(stdout)");
-	timer_start(timer);
-	ArrayList* kmeans_dups = find_kmeans_dups(vectors, max_iter, 64, complete_dups);
-	timer_stop(timer);
-	timer_print_cmp(timer, "Kmeans clustering");
+	timer_benchmark(timer,
+		ArrayList* kmeans_dups = find_kmeans_dups(vectors, max_iter, 64, complete_dups);
+	);
 	
 	// Print kmeans summary.
+	timer_print_cmp(timer, "Kmeans clustering");
 	double percent_success_kmeans = 100.0 * (double)kmeans_dups->size / (double)complete_dups->size;
 	printf("kmeans found %ld dups (%%%.2lf).\n", kmeans_dups->size / 2, percent_success_kmeans);
 	check(fflush(stdout), "fflush(stdout)");
