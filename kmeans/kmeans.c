@@ -546,19 +546,20 @@ ArrayList* find_complete_dups(double** vectors) {
 
 /*** Finds duplicates using a sliding-window strategy.
  *** 
- *** Compares each vector only with the next up-to-seven neighbors (i+1 .. i+6).
- *** Results are logged to `sliding_file`. Each found pair is validated
- *** against `complete_dups` and a warning is printed if not present there.
+ *** Compares each vector only with the next n pairs in a "sliding window"
+ *** that moves down the data. Results are logged to `sliding_file` and
+ *** validated against the `complete_dups` list.
  ***
  *** @param vectors Array of precomputed frequency vectors for all dataset strings.
- *** @param complete_dups The complete-dups list used to validate sliding results.
- *** @returns A locked, trimmed ArrayList containing duplicate index pairs found by sliding window.
+ *** @param window_size The size of the sliding window.
+ *** @param complete_dups The complete-dups list used to validate results.
+ *** @returns A locked ArrayList containing duplicate index pairs.
  ***/
-ArrayList* find_sliding_dups(double** vectors, ArrayList* complete_dups) {
+ArrayList* find_sliding_dups(double** vectors, int window_size, ArrayList* complete_dups) {
 	ArrayList* sliding_dups = al_newc(512);
 	for (int i = 0; i < NUM_VECTORS; i++) {
 		const double* v1 = vectors[i];
-		const int j_max = min(i + 7, NUM_VECTORS);
+		const int j_max = min(i + window_size, NUM_VECTORS);
 		for (int j = i + 1; j < j_max; j++) {
 			const double* v2 = vectors[j];
 			if (similarity(v1, v2) > THRESHOLD) {
@@ -604,8 +605,8 @@ ArrayList* find_sliding_dups(double** vectors, ArrayList* complete_dups) {
  *** @param vectors Array of precomputed frequency vectors for all dataset strings.
  *** @param max_iter Maximum iterations passed to kmeans().
  *** @param num_clusters Number of clusters to produce.
- *** @param complete_dups The complete-dups list used to validate kmeans results.
- *** @returns A locked ArrayList containing duplicate index pairs found by kmeans.
+ *** @param complete_dups The complete-dups list used to validate results.
+ *** @returns A locked ArrayList containing duplicate index pairs.
  ***/
 ArrayList* find_kmeans_dups(double** vectors, int max_iter, int num_clusters, ArrayList* complete_dups) {
 	// Malloc memory for finding clusters.
@@ -754,7 +755,7 @@ int main(int argc, char* argv[]) {
 	printf("\n");
 	check(fflush(stdout), "fflush(stdout)");
 	timer_start(timer);
-	ArrayList* sliding_dups = find_sliding_dups(vectors, complete_dups);
+	ArrayList* sliding_dups = find_sliding_dups(vectors, 6, complete_dups);
 	timer_stop(timer);
 	
 	// Print sliding summary.
