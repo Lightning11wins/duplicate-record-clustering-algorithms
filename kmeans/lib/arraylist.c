@@ -1,15 +1,14 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "arraylist.h"
 
-// Function to initialize the dynamic array
-ArrayList* al_init(void) {
-	return al_initc(10);
+ArrayList* al_init(ArrayList* list) {
+	return al_initc(list, AL_DEFAULT_SIZE);
 }
 
-ArrayList* al_initc(size_t initialCapacity) {
-	ArrayList* list = (ArrayList*)malloc(sizeof(ArrayList));
-	if (list == NULL) return NULL;
+ArrayList* al_initc(ArrayList* list, size_t initialCapacity) {
+	if (!list) return list;
 
 	list->data = (int*)malloc(initialCapacity * sizeof(int));
 	if (list->data == NULL) {
@@ -19,6 +18,16 @@ ArrayList* al_initc(size_t initialCapacity) {
 	list->size = 0;
 	list->capacity = initialCapacity;
 	list->is_locked = 0;
+	return list;
+}
+
+ArrayList* al_new(void) {
+	return al_newc(AL_DEFAULT_SIZE);
+}
+
+ArrayList* al_newc(size_t initialCapacity) {
+	ArrayList* list = (ArrayList*)malloc(sizeof(ArrayList));
+	al_initc(list, initialCapacity);
 	return list;
 }
 
@@ -48,11 +57,11 @@ int al_get(ArrayList* list, size_t index) {
 }
 
 void al_lock(ArrayList* list) {
-	list->is_locked = 1;
+	list->is_locked = true;
 }
 
 void al_unlock(ArrayList* list) {
-	list->is_locked = 0;
+	list->is_locked = false;
 }
 
 void al_trim_to_size(ArrayList* list) {
@@ -70,6 +79,10 @@ void al_clear(ArrayList* list) {
 		return;
 	}
 	list->size = 0;
+}
+
+void al_destruct(ArrayList* list) {
+	free(list->data);
 }
 
 void al_free(ArrayList* list) {
