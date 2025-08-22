@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,9 +35,13 @@ void timer_stop(Timer* timer) {
 	timer->end = monotonic_seconds();
 }
 
+double timer_get(Timer* timer) {
+	return (timer) ? timer->end - timer->start : NAN;
+}
+
 void timer_store(Timer* timer) {
 	if (!timer) return;
-	timer->stored_duration = timer->end - timer->start;
+	timer->stored_duration = timer_get(timer);
 }
 
 void timer_print(const Timer* timer, const char* name) {
@@ -50,7 +55,7 @@ void timer_print_cmp(const Timer* timer, const char* name) {
 void timer_print_var(const Timer* timer, const char* name, bool do_cmp) {
 	if (!timer || !name) return;
 	const double dur = timer->end - timer->start;
-	printf("%s time: %0.04fs", name, dur);
+	printf("%s time: %.4fs", name, dur);
 	if (do_cmp) {
 		if (timer->stored_duration <= 0) {
 			printf(" (%%--)");

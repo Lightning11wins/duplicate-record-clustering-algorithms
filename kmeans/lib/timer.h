@@ -15,6 +15,7 @@ Timer* timer_init(Timer* timer);
 Timer* timer_new(void);
 void timer_start(Timer* timer);
 void timer_stop(Timer* timer);
+double timer_get(Timer* timer);
 void timer_store(Timer* timer);
 void timer_print(const Timer* timer, const char* name);
 void timer_print_cmp(const Timer* timer, const char* name);
