@@ -151,7 +151,7 @@ int exp_fn_i_frequency_table(double* table, char* term) {
 }
 
 // ====================================
-// Vectoring Code
+// Research Code
 
 /*** Helper function for compact error handling on library & system function calls.
  ***
@@ -453,7 +453,12 @@ void kmeans(double** vectors, int* labels, double** centroids, int max_iter, int
 	free(cluster_counts);
 }
 
-// Not thread safe.
+/*** Loads the dataset from disk into the global `dataset` array.
+ *** 
+ *** @attention - Not thread safe: Uses strdup and strtok.
+ *** 
+ *** @param dataset_path Path to a comma-separated file containing the dataset strings.
+ ***/
 void load_dataset(const char* dataset_path) {
 	FILE *file = fopen(dataset_path, "r");
 	if (!file) {
@@ -485,6 +490,13 @@ void load_dataset(const char* dataset_path) {
 	free(buffer);
 }
 
+/*** Checks whether the ordered pair (d1, d2) exists in `complete_dups`.
+ ***
+ *** @param complete_dups An ArrayList containing pairs of duplicate indices.
+ *** @param d1 First index of the pair to verify.
+ *** @param d2 Second index of the pair to verify.
+ *** @returns true if the exact pair exists, false otherwise.
+ ***/
 bool verify_dupe(ArrayList* complete_dups, int d1, int d2) {
 	size_t num_complete_dups = complete_dups->size;
 	for (size_t j = 0; j < num_complete_dups;) {
@@ -495,6 +507,15 @@ bool verify_dupe(ArrayList* complete_dups, int d1, int d2) {
 	return false;
 }
 
+/*** Scans the entire dataset for duplicates by pairwise similarity.
+ *** 
+ *** This is the "complete" strategy: every pair `(i, j)` is compared and
+ *** pairs with `(similarity > THRESHOLD)` are appended to the returned list.
+ *** The function also logs found duplicates to the `complete_file`.
+ *** 
+ *** @param vectors Array of precomputed frequency vectors for all dataset strings.
+ *** @returns A locked ArrayList containing duplicate index pairs.
+ ***/
 ArrayList* find_complete_dups(double** vectors) {
 	ArrayList* complete_dups = al_newc(512);
 	for (int i = 0; i < NUM_VECTORS; i++) {
@@ -523,6 +544,16 @@ ArrayList* find_complete_dups(double** vectors) {
 	return complete_dups;
 }
 
+/*** Finds duplicates using a sliding-window strategy.
+ *** 
+ *** Compares each vector only with the next up-to-seven neighbors (i+1 .. i+6).
+ *** Results are logged to `sliding_file`. Each found pair is validated
+ *** against `complete_dups` and a warning is printed if not present there.
+ ***
+ *** @param vectors Array of precomputed frequency vectors for all dataset strings.
+ *** @param complete_dups The complete-dups list used to validate sliding results.
+ *** @returns A locked, trimmed ArrayList containing duplicate index pairs found by sliding window.
+ ***/
 ArrayList* find_sliding_dups(double** vectors, ArrayList* complete_dups) {
 	ArrayList* sliding_dups = al_newc(512);
 	for (int i = 0; i < NUM_VECTORS; i++) {
@@ -556,6 +587,26 @@ ArrayList* find_sliding_dups(double** vectors, ArrayList* complete_dups) {
 	return sliding_dups;
 }
 
+/*** Runs k-means clustering then finds duplicates inside clusters.
+ ***
+ *** Steps:
+ *** 
+ ***  - Allocate labels and centroids.
+ *** 
+ ***  - Run kmeans(...) to assign labels.
+ *** 
+ ***  - For each cluster, compare points inside the cluster and record pairs
+ ***    with `(similarity > THRESHOLD)`.
+ *** 
+ ***  - Log duplicates and cluster contents to `kmeans_file`, validate found
+ ***    pairs against `complete_dups` to detect mistakes.
+ ***
+ *** @param vectors Array of precomputed frequency vectors for all dataset strings.
+ *** @param max_iter Maximum iterations passed to kmeans().
+ *** @param num_clusters Number of clusters to produce.
+ *** @param complete_dups The complete-dups list used to validate kmeans results.
+ *** @returns A locked ArrayList containing duplicate index pairs found by kmeans.
+ ***/
 ArrayList* find_kmeans_dups(double** vectors, int max_iter, int num_clusters, ArrayList* complete_dups) {
 	// Malloc memory for finding clusters.
 	int* labels = malloc(NUM_VECTORS * sizeof(int));
@@ -641,6 +692,30 @@ ArrayList* find_kmeans_dups(double** vectors, int max_iter, int num_clusters, Ar
 	return kmeans_dups;
 }
 
+/*** Program entry point: runs three duplicate-detection strategies and reports results.
+ ***
+ *** Usage:
+ *** 
+ ***  - argv[1] -> complete_file_name
+ *** 
+ ***  - argv[2] -> sliding_file_name
+ *** 
+ ***  - argv[3] -> kmeans_file_name
+ ***
+ *** The program:
+ *** 
+ ***  - opens the three output files,
+ *** 
+ ***  - loads the dataset and builds vectors,
+ *** 
+ ***  - runs: complete search, sliding window, and kmeans clustering,
+ *** 
+ ***  - prints timing and success statistics, then frees resources and exits.
+ ***
+ *** @param argc Number of command-line arguments; must be 4.
+ *** @param argv Command-line argument vector.
+ *** @returns `0` on success, `1` on incorrect invocation.
+ ***/
 int main(int argc, char* argv[]) {
 	if (argc != 4) {
 		fprintf(stderr, "Usage: %s <complete_file_name> <sliding_file_name> <kmeans_file_name>\n", argv[0]);
