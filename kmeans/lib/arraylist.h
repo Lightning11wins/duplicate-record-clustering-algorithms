@@ -1,17 +1,23 @@
 #ifndef __H_ARRAYLIST
 #define __H_ARRAYLIST
+#include <stdbool.h>
+
+// Constants
+#define AL_DEFAULT_SIZE 10
 
 // Struct
 typedef struct {
 	size_t size;
 	size_t capacity;
-	int is_locked;
+	bool is_locked;
 	int* data;
 } ArrayList;
 
 // Constructors
-ArrayList* al_init(void);
-ArrayList* al_initc(size_t initialCapacity);
+ArrayList* al_init(ArrayList* list);
+ArrayList* al_initc(ArrayList* list, size_t initialCapacity);
+ArrayList* al_new(void);
+ArrayList* al_newc(size_t initialCapacity);
 
 // Member methods
 void al_add(ArrayList* list, int element);
@@ -20,6 +26,7 @@ void al_lock(ArrayList* list);
 void al_unlock(ArrayList* list);
 void al_trim_to_size(ArrayList* list);
 void al_clear(ArrayList* list);
+void al_destruct(ArrayList* list);
 void al_free(ArrayList* list);
 
 #endif

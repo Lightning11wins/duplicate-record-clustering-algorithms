@@ -6,7 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
 #include "lib/arraylist.h"
+#include "lib/timer.h"
 
 // Define the dataset.
 #define DATASET_PATH "dataset_unique_sorted.txt"
@@ -16,7 +18,7 @@
 #define NUM_CLUSTERS 64            // Number of clusters (K).
 #define NUM_DIMS 251               // The number of dimensions used for clustering data.
 #define NUM_VECTORS DATASET_SIZE   // The number of strings in the test dataset.
-#define SEED 0                     // The seed used for randomly selecting centroids.
+#define SEED 1621963727            // The seed used for randomly selecting centroids.
 #define THRESHOLD 0.75
 
 char* dataset[NUM_VECTORS];
@@ -24,24 +26,7 @@ FILE* complete_file = NULL;
 FILE* sliding_file = NULL;
 FILE* kmeans_file = NULL;
 
-#define streql(str1, str2) !strcmp((str1), (str2))
-
-// Timer code
-#define duration(start, end) ((end) - (start))
-#define timer_init() double timer_start = -1, timer_end = -1, timer_duration = -1;
-#define timer_start() timer_start = monotonic_seconds()
-#define timer_stop() timer_end = monotonic_seconds()
-#define timer_store() timer_duration = duration(timer_start, timer_end)
-#define timer_print(name) print_time(name, duration(timer_start, timer_end))
-#define timer_print_cmp(name) print_time_cmp(name, duration(timer_start, timer_end))
-#define print_time(name, seconds) printf("\n%s time: %0.04fs.\n", name, seconds)
-#define print_time_cmp(name, seconds) printf("\n%s time: %0.04fs (%%%.2lf).\n", name, seconds, 100.0 * (double)(seconds) / (double)timer_duration)
-
-static double monotonic_seconds(void) {
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
-}
+#define streql(str1, str2) (strcmp((str1), (str2)) == 0)
 
 #define max(a, b) ({ \
 	__typeof__ (a) _a = (a); \
@@ -54,11 +39,6 @@ static double monotonic_seconds(void) {
 	__typeof__ (b) _b = (b); \
 	(_a < _b) ? _a : _b; \
 })
-
-// Things to fix:
-// Optimize Data Conversions
-// Add documentation
-// Free memory
 
 // ====================================
 // Centralix Code
@@ -165,7 +145,6 @@ static int exp_fn_i_frequency_table(double* table, char* term) {
 		
 		// Increment Frequency Table value by number from 1 to 13.
 		table[index] += (temp1 + temp2) % 13 + 1;
-		// table[index] += 1;
 		
 		j = i;
 	}
@@ -295,7 +274,7 @@ static int print_cluster_size(double** vectors, int num_vectors, int* labels, do
 	}
 	
 	// Calculate the average difference per cluster and then the overall average.
-	fprintf(kmeans_file, "\nCluster Sizes:\n");
+	fprintf(kmeans_file, "Cluster Sizes:\n");
 	int valid_clusters = 0;
 	double cluster_total = 0.0, noncluster_total = 0.0;
 	double max_cluster_size = 0.0, min_cluster_size = 1.0;
@@ -330,12 +309,13 @@ static int print_cluster_size(double** vectors, int num_vectors, int* labels, do
 		double average_cluster_size = cluster_total / valid_clusters;
 		double average_noncluster_size = noncluster_total / valid_clusters;
 		
-		printf(
+		fprintf(kmeans_file,
 			"\nkmeans #%d:\n"
 				"\t> Average cluster: %.4lf\n"
 				"\t> Average noncluster: %.4lf\n"
 				"\t> Largest cluster: #%d @ %.4lf\n"
-				"\t> Smallest cluster: #%d @ %.4lf\n",
+				"\t> Smallest cluster: #%d @ %.4lf\n"
+			"\n",
 			iteration,
 			average_cluster_size,
 			average_noncluster_size,
@@ -385,6 +365,7 @@ static void kmeans(double** vectors, int num_vectors, int* labels, double** cent
 		
 		// print_difference(vectors, 0, random_index); // Debug
 	}
+	fprintf(kmeans_file, "\n");
 	
 	// Allocate memory for new centroids
 	double** new_centroids = malloc(NUM_CLUSTERS * sizeof(double*));
@@ -521,18 +502,18 @@ int main(int argc, char* argv[]) {
 	// Load the dataset from the .gitignored dataset file.
 	load_dataset(DATASET_PATH);
 	
-	// Setup timer.
-	timer_init();
-	
-	// Allocate ram to store vectors.
+	// Allocate space to store vectors.
 	double** vectors = malloc(NUM_VECTORS * sizeof(double*));
 	
 	// Build the vectors.
 	check(build_vectors(vectors, dataset, NUM_VECTORS), "build_vectors");
 	
 	// Execute the complete solution.
-	timer_start();
-	ArrayList* complete_dups = al_initc(512);
+	printf("\n");
+	check(fflush(stdout), "fflush(stdout)");
+	Timer* timer = timer_new();
+	timer_start(timer);
+	ArrayList* complete_dups = al_newc(512);
 	for (int i = 0; i < NUM_VECTORS; i++) {
 		const double* v1 = vectors[i];
 		for (int j = i + 1; j < NUM_VECTORS; j++) {
@@ -543,13 +524,13 @@ int main(int argc, char* argv[]) {
 			}
 		}
 	}
-	timer_stop();
-	timer_print("Complete similarity");
-	timer_store();
+	timer_stop(timer);
+	timer_print(timer, "Complete similarity");
+	timer_store(timer);
 	
 	// Lock result.
-	al_trim_to_size(complete_dups);
 	al_lock(complete_dups);
+	al_trim_to_size(complete_dups);
 	
 	// Print basic information.
 	size_t num_complete_dups = complete_dups->size;
@@ -564,8 +545,10 @@ int main(int argc, char* argv[]) {
 	}
 	
 	// Execute current (sliding window) solution.
-	timer_start();
-	ArrayList* sliding_dups = al_initc(512);
+	printf("\n");
+	check(fflush(stdout), "fflush(stdout)");
+	timer_start(timer);
+	ArrayList* sliding_dups = al_newc(512);
 	for (int i = 0; i < NUM_VECTORS; i++) {
 		const double* v1 = vectors[i];
 		const int j_max = min(i + 7, NUM_VECTORS);
@@ -577,12 +560,12 @@ int main(int argc, char* argv[]) {
 			}
 		}
 	}
-	timer_stop();
-	timer_print_cmp("Sliding similarity");
+	timer_stop(timer);
+	timer_print_cmp(timer, "Sliding similarity");
 	
 	// Lock result.
-	al_trim_to_size(sliding_dups);
 	al_lock(sliding_dups);
+	al_trim_to_size(sliding_dups);
 	
 	// Print basic information.
 	size_t num_sliding_dups = sliding_dups->size;
@@ -610,7 +593,9 @@ int main(int argc, char* argv[]) {
 	}
 	
 	// Start kmeans clustering timer.
-	timer_start();
+	printf("\n");
+	check(fflush(stdout), "fflush(stdout)");
+	timer_start(timer);
 	
 	// Allocate memory for clustering labels.
 	int* labels = malloc(NUM_VECTORS * sizeof(int));
@@ -626,7 +611,7 @@ int main(int argc, char* argv[]) {
 	kmeans(vectors, NUM_VECTORS, labels, centroids);
 	
 	// Find duplocates in clusters.
-	ArrayList* kmeans_dups = al_initc(512);
+	ArrayList* kmeans_dups = al_newc(512);
 	for (int i = 0; i < NUM_VECTORS; i++) {
 		const double* v1 = vectors[i];
 		const int label = labels[i];
@@ -641,12 +626,12 @@ int main(int argc, char* argv[]) {
 	}
 	
 	// Stop kmeans clustering timer.
-	timer_stop();
-	timer_print_cmp("kmeans clustering");
+	timer_stop(timer);
+	timer_print_cmp(timer, "kmeans clustering");
 	
 	// Lock result.
-	al_trim_to_size(kmeans_dups);
 	al_lock(kmeans_dups);
+	al_trim_to_size(kmeans_dups);
 	
 	// Print basic information.
 	size_t num_kmeans_dups = kmeans_dups->size;

@@ -9,9 +9,8 @@ NAME = kmeans
 BUILD_DIR = bin
 LIB_DIR = lib
 OUT_DIR = out
-ARR_DEBUG = $(BUILD_DIR)/arraylist_debug.o
-ARR_FAST = $(BUILD_DIR)/arraylist_fast.o
-ARR_SRC = $(LIB_DIR)/arraylist.c
+LIBS = arraylist timer
+LIBOS = $(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(LIBS)))
 BIN_DEBUG = $(BUILD_DIR)/$(NAME)_debug.o
 BIN_FAST = $(BUILD_DIR)/$(NAME)_fast.o
 SRC = $(NAME).c
@@ -47,20 +46,17 @@ valgrind: $(BUILD_DIR) $(OUT_DIR) $(BIN_DEBUG)
 
 asm: $(ASM)
 
-$(ASM): $(ARR_DEBUG) $(SRC)
-	$(CC) $(ARR_DEBUG) -S -o $(ASM) $(SRC) $(CFLAGS_FAST)
+$(ASM): $(SRC)
+	$(CC) -S -o $(ASM) $(SRC) $(CFLAGS_FAST)
 
-$(BIN_DEBUG): $(ARR_DEBUG) $(SRC)
-	$(CC) $(ARR_DEBUG) -o $(BIN_DEBUG) $(SRC) $(CFLAGS_DEBUG)
+$(BIN_DEBUG): $(LIBOS) $(SRC)
+	$(CC) -o $@ $< $(CFLAGS_DEBUG)
 
-$(BIN_FAST): $(ARR_FAST) $(SRC)
-	$(CC) $(ARR_FAST) -o $(BIN_FAST) $(SRC) $(CFLAGS_FAST)
+$(BIN_FAST): $(LIBOS) $(SRC)
+	$(CC) -o $@ $^ $(CFLAGS_FAST)
 
-$(ARR_DEBUG): $(ARR_SRC)
-	$(CC) -o $(ARR_DEBUG) -c $(ARR_SRC) $(CFLAGS_FAST)
-
-$(ARR_FAST): $(ARR_SRC)
-	$(CC) -o $(ARR_FAST) -c $(ARR_SRC) $(CFLAGS_FAST)
+$(LIBOS): $(BUILD_DIR)/%.o: $(LIB_DIR)/%.c
+	$(CC) -o $@ -c $^ $(CFLAGS_FAST)
 
 $(BUILD_DIR):
 	mkdir $(BUILD_DIR)
