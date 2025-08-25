@@ -3,7 +3,8 @@
 #include <stdbool.h>
 
 // Constants
-#define AL_DEFAULT_SIZE 10
+#define AL_DEFAULT_CAPACITY (size_t)16
+#define AL_MIN_CAPACITY (size_t)4
 
 // Struct
 typedef struct {
@@ -15,9 +16,9 @@ typedef struct {
 
 // Constructors
 ArrayList* al_init(ArrayList* list);
-ArrayList* al_initc(ArrayList* list, size_t initialCapacity);
+ArrayList* al_initc(ArrayList* list, size_t initial_capacity);
 ArrayList* al_new(void);
-ArrayList* al_newc(size_t initialCapacity);
+ArrayList* al_newc(size_t initial_capacity);
 
 // Member methods
 void al_add(ArrayList* list, int element);

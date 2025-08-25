@@ -2,32 +2,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "arraylist.h"
+#include "utils.h"
 
 ArrayList* al_init(ArrayList* list) {
-	return al_initc(list, AL_DEFAULT_SIZE);
+	return al_initc(list, AL_DEFAULT_CAPACITY);
 }
 
-ArrayList* al_initc(ArrayList* list, size_t initialCapacity) {
+ArrayList* al_initc(ArrayList* list, size_t initial_capacity) {
 	if (!list) return list;
+	
+	if (initial_capacity < AL_MIN_CAPACITY) {
+		fprintf(stderr, "[ArrayList] al_initc() - Increasing initial capacity from requested (%ld) to minimum (%ld).\n", initial_capacity, AL_MIN_CAPACITY);
+	}
 
-	list->data = malloc(initialCapacity * sizeof(int));
+	list->data = malloc(initial_capacity * sizeof(int));
 	if (list->data == NULL) {
 		free(list);
 		return NULL;
 	}
 	list->size = 0;
-	list->capacity = initialCapacity;
+	list->capacity = initial_capacity;
 	list->is_locked = 0;
 	return list;
 }
 
 ArrayList* al_new(void) {
-	return al_newc(AL_DEFAULT_SIZE);
+	return al_newc(AL_DEFAULT_CAPACITY);
 }
 
-ArrayList* al_newc(size_t initialCapacity) {
+ArrayList* al_newc(size_t initial_capacity) {
 	ArrayList* list = malloc(sizeof(ArrayList));
-	al_initc(list, initialCapacity);
+	al_initc(list, initial_capacity);
 	return list;
 }
 
@@ -35,13 +40,13 @@ static void al_ensure_capacity(ArrayList* list, size_t min_capacity) {
 	while (list->capacity < min_capacity) {
 		size_t new_size = (list->capacity *= 2) * sizeof(int);
 		list->data = (int*)realloc(list->data, new_size);
-		if (list->data == NULL) fprintf(stderr, "[ArrayList] realloc(%ld) failed!\n", new_size);
+		if (list->data == NULL) fprintf(stderr, "[ArrayList] al_ensure_capacity() - realloc(%ld) failed!\n", new_size);
 	}
 }
 
 void al_add(ArrayList* list, int element) {
 	if (list->is_locked) {
-		fprintf(stderr, "Attempted to add %d to locked list of size %ld.\n", element, list->size);
+		fprintf(stderr, "[ArrayList] al_add() - Attempted to add %d to locked list of size %ld.\n", element, list->size);
 		return;
 	}
 	al_ensure_capacity(list, list->size + 1);
@@ -50,7 +55,7 @@ void al_add(ArrayList* list, int element) {
 
 int al_get(ArrayList* list, size_t index) {
 	if (index >= list->size) {
-		fprintf(stderr, "[ArrayList] Index %ld out of bounds for length %ld!\n", index, list->size);
+		fprintf(stderr, "[ArrayList] al_get() - Index %ld out of bounds for length %ld!\n", index, list->size);
 		return -1; // Fail
 	}
 	return list->data[index];
@@ -66,16 +71,16 @@ void al_unlock(ArrayList* list) {
 
 void al_trim_to_size(ArrayList* list) {
 	if (list->size < list->capacity) {
-		size_t new_size = list->size * sizeof(int);
-		list->data = (int*)realloc(list->data, new_size);
-		if (list->data == NULL) fprintf(stderr, "[ArrayList] realloc(%ld) failed!\n", new_size);
+		size_t new_size_bytes = (list->capacity = max(AL_MIN_CAPACITY, list->size)) * sizeof(int);
+		list->data = (int*)realloc(list->data, new_size_bytes);
+		if (list->data == NULL) fprintf(stderr, "[ArrayList] al_trim_to_size() - realloc(%ld) failed!\n", new_size_bytes);
 		list->capacity = list->size;
 	}
 }
 
 void al_clear(ArrayList* list) {
 	if (list->is_locked) {
-		fprintf(stderr, "Attempted to clear locked list of size %ld.\n", list->size);
+		fprintf(stderr, "[ArrayList] al_clear() - Attempted to clear locked list of size %ld.\n", list->size);
 		return;
 	}
 	list->size = 0;
