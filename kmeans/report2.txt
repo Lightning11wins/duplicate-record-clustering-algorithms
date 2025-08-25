@@ -1,0 +1,78 @@
+Begin!
+
+Settings:
+	> Dataset (x19734): datasets/new_data.txt
+	> Dimensions: 251
+	> Similarity Threshold: 0.7500
+
+Complete search on 19734 records:
+	> Dups: 56939
+	> Time: 150.9808s
+
+Sliding window (x3):
+	> Dups: 6233/56939 (%10.95)
+	> Time: 0.0342s (%0.02)
+
+Sliding window (x6):
+	> Dups: 8599/56939 (%15.10)
+	> Time: 0.0791s (%0.05)
+
+Sliding window (x16):
+	> Dups: 10442/56939 (%18.34)
+	> Time: 0.2311s (%0.15)
+
+Sliding window (x32):
+	> Dups: 11684/56939 (%20.52)
+	> Time: 0.4425s (%0.29)
+
+Sliding window (x64):
+	> Dups: 13068/56939 (%22.95)
+	> Time: 0.8478s (%0.56)
+
+Sliding window (x256):
+	> Dups: 15609/56939 (%27.41)
+	> Time: 3.6545s (%2.42)
+
+Kmeans (num_clusters=4):
+	> Kmeans clustering time: 3.9225s (%8.67).
+	> Kmeans checking time: 41.2811s (%91.29).
+	> Time: 45.2177s (%29.95)
+	> Iterations: 32/32
+	> Dups: 49152/56939 (%86.32)
+
+Kmeans (num_clusters=8):
+	> Kmeans clustering time: 7.3809s (%24.00).
+	> Kmeans checking time: 23.3652s (%75.96).
+	> Time: 30.7598s (%20.37)
+	> Iterations: 32/32
+	> Dups: 47596/56939 (%83.59)
+
+Kmeans (num_clusters=16):
+	> Kmeans clustering time: 15.7392s (%56.11).
+	> Kmeans checking time: 12.2987s (%43.84).
+	> Time: 28.0513s (%18.58)
+	> Iterations: 32/32
+	> Dups: 46551/56939 (%81.76)
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 29.8996s (%84.67).
+	> Kmeans checking time: 5.4018s (%15.30).
+	> Time: 35.3138s (%23.39)
+	> Iterations: 32/32
+	> Dups: 44818/56939 (%78.71)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 49.0646s (%93.90).
+	> Kmeans checking time: 3.1744s (%6.08).
+	> Time: 52.2511s (%34.61)
+	> Iterations: 27/32
+	> Dups: 45760/56939 (%80.37)
+
+Kmeans (num_clusters=128):
+	> Kmeans clustering time: 87.1688s (%97.83).
+	> Kmeans checking time: 1.9215s (%2.16).
+	> Time: 89.1047s (%59.02)
+	> Iterations: 24/32
+	> Dups: 44270/56939 (%77.75)
+
+Kmeans (num_clusters=256):

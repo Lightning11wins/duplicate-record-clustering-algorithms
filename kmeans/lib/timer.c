@@ -15,7 +15,7 @@ Timer* timer_init(Timer* timer) {
 	if (!timer) return timer;
 	timer->start = -1.0;
 	timer->end = -1.0;
-	timer->stored_duration = -1.0;
+	timer->stored_duration = NAN;
 	return timer;
 }
 
@@ -45,24 +45,28 @@ void timer_store(Timer* timer) {
 }
 
 void timer_print(const Timer* timer, const char* name) {
-	return timer_print_var(timer, name, false);
+	return timer_print_cmp(timer, name, NAN);
 }
 
-void timer_print_cmp(const Timer* timer, const char* name) {
-	return timer_print_var(timer, name, true);
+void timer_print_s(const Timer* timer, const char* name) {
+	return timer_print_cmp(timer, name, timer->stored_duration);
 }
 
-void timer_print_var(const Timer* timer, const char* name, bool do_cmp) {
+void timer_print_cmp(const Timer* timer, const char* name, double cmp) {
 	if (!timer || !name) return;
 	const double dur = timer->end - timer->start;
 	printf("%s time: %.4fs", name, dur);
-	if (do_cmp) {
-		if (timer->stored_duration <= 0) {
+	if (!isnan(cmp)) {
+		if (cmp <= 0) {
 			printf(" (%%--)");
 		} else {
-			const double percent = 100.0f * dur / timer->stored_duration;
+			const double percent = 100.0f * dur / cmp;
 			printf(" (%%%.2f)", percent);
 		}
 	}
 	printf(".\n");
+}
+
+void timer_free(Timer* timer) {
+	free(timer);
 }

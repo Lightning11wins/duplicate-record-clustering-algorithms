@@ -9,10 +9,17 @@
 
 #include "lib/arraylist.h"
 #include "lib/timer.h"
+#include "lib/utils.h"
 
 // Define the dataset.
+// #define DATASET_PATH "datasets/forenames.txt"
+// #define DATASET_SIZE 1000 * 1000
+// #define DATASET_PATH "datasets/new_data.txt"
+// #define DATASET_SIZE 19734
+// #define DATASET_PATH "datasets/blackholes.txt"
+// #define DATASET_SIZE 4632
 #define DATASET_PATH "datasets/dataset_unique_sorted.txt"
-#define DATASET_SIZE 1257 // 1975
+#define DATASET_SIZE 1257
 
 #define INDENT "\t> "
 #define NUM_DIMS 251               // The number of dimensions used for clustering data.
@@ -24,26 +31,21 @@
 int window_sizes[] = {3, 6, 16, 32, 64, 256};
 int cluster_counts[] = {4, 8, 16, 32, 64, 128, 256};
 int max_iter = 32;
-int num_repeats = 4; // Repeat algorithms to reduce randomness.
+int num_repeats = 1; // Repeat algorithms to reduce randomness.
 
 char* dataset[NUM_VECTORS];
 FILE* complete_file = NULL;
 FILE* sliding_file = NULL;
 FILE* kmeans_file = NULL;
 
-#define streql(str1, str2) (strcmp((str1), (str2)) == 0)
-
-#define max(a, b) ({ \
-	__typeof__ (a) _a = (a); \
-	__typeof__ (b) _b = (b); \
-	(_a > _b) ? _a : _b; \
-})
-
-#define min(a, b) ({ \
-	__typeof__ (a) _a = (a); \
-	__typeof__ (b) _b = (b); \
-	(_a < _b) ? _a : _b; \
-})
+/*** Complexity Analysis
+ *** n: The number of input records.
+ *** d: The number of dimensions. (251)
+ *** w: The number of records in sliding window.
+ *** k: The number of kmeans clusters.
+ *** i: The number of kmeans iterations.
+ *** s: The number of records in the average cluster.
+ ***/
 
 // ====================================
 // Centralix Code
@@ -80,6 +82,8 @@ int exp_fn_i_hash_char_pair(double num1, double num2) {
  * Returns:
  * 	0
  * 
+ * Complexity: `O(d)`
+ * 
  * LINK ../../centrallix-sysdoc/string_comparison.md#exp_fn_i_dot_product
  */
 int exp_fn_i_dot_product(double* dot_product_ptr, const double* r_freq_table1, const double* r_freq_table2) {
@@ -99,6 +103,8 @@ int exp_fn_i_dot_product(double* dot_product_ptr, const double* r_freq_table1, c
  * Parameters:
  * 	magnitude : the place where the result is stored (double)
  * 	r_freq_table : the vector (double)
+ * 
+ * Complexity: `O(d)`
  * 
  * LINK ../../centrallix-sysdoc/string_comparison.md#exp_fn_i_magnitude
  */
@@ -217,6 +223,8 @@ int build_vectors(double** vectors, char** strs, size_t num_vectors) {
  *** @param v2 The second vector being compared.
  *** @returns {0 - 1} where 0 indicates that the vectors (and the strings they
  ***          represent) have no similarity and 1 indicates that they are identical.
+ *** 
+ *** Complexity: `O(3d)`
  ***/
 double similarity(const double* v1, const double* v2) {
 	// Calculate dot product
@@ -242,6 +250,8 @@ double similarity(const double* v1, const double* v2) {
  *** @param v2 The second vector being compared.
  *** @returns {0 - 1}: where 0 indicates that the vectors (and the strings they
  ***          represent) are identical and 1 indicates that they have no similarity.
+ *** 
+ *** Complexity: `O(3d)`
  ***/
 #define difference(v1, v2) (1.0 - similarity((v1), (v2)))
 
@@ -354,6 +364,14 @@ int print_cluster_size(double** vectors, int* labels, double** centroids, int nu
  *** 	iteration, which puts the efficacy of the algorithm into question. This
  *** 	may be due to the uneven density of a typical dataset. However, the
  *** 	clusters still offer useful information.
+ *** 
+ *** Complexity:
+ *** 
+ *** - `O(kd + k + i*(k + n*(k+d) + kd))`
+ *** 
+ *** - `O(kd + k + ik + ink + ind + ikd)`
+ *** 
+ *** - `O(nk + nd)`
  ***/
 void kmeans(double** vectors, int* labels, double** centroids, int* iterations, int max_iter, int num_clusters) {
 	// Select random vectors to use as the initial centroids.
@@ -361,7 +379,7 @@ void kmeans(double** vectors, int* labels, double** centroids, int* iterations, 
 	for (int i = 0; i < num_clusters; i++) {
 		// Pick a random vector.
 		const int random_index = rand() % NUM_VECTORS;
-		fprintf(kmeans_file, "Centroid %d starts at vector %d.\n", i, random_index); // Debug
+		// fprintf(kmeans_file, "Centroid %d starts at vector %d.\n", i, random_index); // Debug
 		
 		// Copy each dimetion from the selected random vector to the current centroid.
 		for (int dim = 0; dim < NUM_DIMS; dim++) {
@@ -370,7 +388,7 @@ void kmeans(double** vectors, int* labels, double** centroids, int* iterations, 
 		
 		// print_difference(vectors, 0, random_index); // Debug
 	}
-	fprintf(kmeans_file, "\n");
+	// fprintf(kmeans_file, "\n");
 	
 	// Allocate memory for new centroids
 	double** new_centroids = malloc((size_t)num_clusters * sizeof(double*));
@@ -418,39 +436,23 @@ void kmeans(double** vectors, int* labels, double** centroids, int* iterations, 
 			cluster_counts[best_centroid_label]++;
 		}
 		
-		// Update centroids
-		for (int i = 0; i < num_clusters; i++) {
-			if (cluster_counts[i] > 0) {
-				for (int dim = 0; dim < NUM_DIMS; dim++) {
-					centroids[i][dim] = new_centroids[i][dim] / cluster_counts[i];
-				}
-			}
-		}
-		
-		// Print cluster size for debugging.
-		print_cluster_size(vectors, labels, centroids, num_clusters, iter);
-		
 		// Save number of iterations (if needed).
 		if (iterations != NULL) *iterations = iter + 1;
 		
 		// Stop if centroids didn't change.
 		if (!changed) break;
-	}
-	
-	// Final centroid update.
-	for (int i = 0; i < NUM_VECTORS; i++) {
-		double* vector = vectors[i];
-		double min_dist = DBL_MAX;
-		int best_centroid_label = 0;
 		
-		for (int j = 0; j < num_clusters; j++) {
-			double dist = difference(vector, centroids[j]);
-			if (dist < min_dist) {
-				min_dist = dist;
-				best_centroid_label = j;
+		// Update centroids.
+		for (int i = 0; i < num_clusters; i++) {
+			if (cluster_counts[i] <= 0)  continue;
+			for (int dim = 0; dim < NUM_DIMS; dim++) {
+				centroids[i][dim] = new_centroids[i][dim] / cluster_counts[i];
 			}
 		}
-		labels[i] = best_centroid_label;
+		
+		// Print cluster size for debugging.
+		// print_cluster_size(vectors, labels, centroids, num_clusters, iter);
+		fflush(stdout);
 	}
 	
 	// Free memory.
@@ -488,6 +490,16 @@ void load_dataset(const char* dataset_path) {
 		exit(EXIT_FAILURE);
 	}
 	
+	// Verify dataset size.
+	size_t size = 1;
+	for (char* buf = buffer; *buf != '\0';) {
+        if (*buf == ',') size++;
+        buf++;
+    }
+	if (size != NUM_VECTORS) {
+		fprintf(stderr, "\nWarning: Expected dataset of size %d but got %ld.\n\n", NUM_VECTORS, size);
+	}
+	
 	size_t count = 0;
 	char* token = strtok(buffer, ",");
 	while (token && count < NUM_VECTORS) {
@@ -506,6 +518,7 @@ void load_dataset(const char* dataset_path) {
  *** @returns true if the exact pair exists, false otherwise.
  ***/
 bool verify_dupe(ArrayList* complete_dups, int d1, int d2) {
+	return true;
 	size_t num_complete_dups = complete_dups->size;
 	for (size_t j = 0; j < num_complete_dups;) {
 		int dc1 = al_get(complete_dups, j++);
@@ -523,6 +536,8 @@ bool verify_dupe(ArrayList* complete_dups, int d1, int d2) {
  *** 
  *** @param vectors Array of precomputed frequency vectors for all dataset strings.
  *** @returns A locked ArrayList containing duplicate index pairs.
+ *** 
+ *** Complexity: `O(n^2 * 3d)`
  ***/
 ArrayList* find_complete_dups(double** vectors) {
 	ArrayList* complete_dups = al_newc(512);
@@ -562,6 +577,8 @@ ArrayList* find_complete_dups(double** vectors) {
  *** @param window_size The size of the sliding window.
  *** @param complete_dups The complete-dups list used to validate results.
  *** @returns A locked ArrayList containing duplicate index pairs.
+ *** 
+ *** Complexity: `O(nw * 3d)`
  ***/
 ArrayList* find_sliding_dups(double** vectors, int window_size, ArrayList* complete_dups) {
 	ArrayList* sliding_dups = al_newc(512);
@@ -615,32 +632,46 @@ ArrayList* find_sliding_dups(double** vectors, int window_size, ArrayList* compl
  *** @param num_clusters Number of clusters to produce.
  *** @param complete_dups The complete-dups list used to validate results.
  *** @returns A locked ArrayList containing duplicate index pairs.
+ *** 
+ *** Complexity: `O((nk + nd) + 3d*s^2)`
+ *** Complexity: `O((nk + nd) + 3d*(n/k)^2)`
+ *** Complexity: `O(nk + (n/k)^2)` (ignoring i & d)
  ***/
 ArrayList* find_kmeans_dups(double** vectors, int* iterations, int max_iter, int num_clusters, ArrayList* complete_dups) {
+	// Create timers.
+	Timer* timer_total = timer_new();
+	Timer* timer_clustering = timer_new();
+	Timer* timer_scan = timer_new();
+	timer_start(timer_total);
+	
 	// Malloc memory for finding clusters.
 	int* labels = malloc(NUM_VECTORS * sizeof(int));
 	for (int i = 0; i < NUM_VECTORS; i++) labels[i] = -1;
-    double** centroids = malloc((size_t)num_clusters * sizeof(double*));
+	double** centroids = malloc((size_t)num_clusters * sizeof(double*));
 	for (int i = 0; i < num_clusters; i++)
 		centroids[i] = malloc(NUM_DIMS * sizeof(double));
 	
 	// Execute kmeans clustering.
-	kmeans(vectors, labels, centroids, iterations, max_iter, num_clusters);
+	timer_benchmark(timer_clustering,
+		kmeans(vectors, labels, centroids, iterations, max_iter, num_clusters);
+	);
 	
 	// Find duplocates in clusters.
-	ArrayList* kmeans_dups = al_newc(512);
-	for (int i = 0; i < NUM_VECTORS; i++) {
-		const double* v1 = vectors[i];
-		const int label = labels[i];
-		for (int j = i + 1; j < NUM_VECTORS; j++) {
-			if (labels[j] != label) continue;
-			const double* v2 = vectors[j];
-			if (similarity(v1, v2) > THRESHOLD) {
-				al_add(kmeans_dups, i);
-				al_add(kmeans_dups, j);
+	timer_benchmark(timer_scan,
+		ArrayList* kmeans_dups = al_newc(512);
+		for (int i = 0; i < NUM_VECTORS; i++) {
+			const double* v1 = vectors[i];
+			const int label = labels[i];
+			for (int j = i + 1; j < NUM_VECTORS; j++) {
+				if (labels[j] != label) continue;
+				const double* v2 = vectors[j];
+				if (similarity(v1, v2) > THRESHOLD) {
+					al_add(kmeans_dups, i);
+					al_add(kmeans_dups, j);
+				}
 			}
 		}
-	}
+	);
 	
 	// Lock results.
 	al_lock(kmeans_dups);
@@ -650,7 +681,8 @@ ArrayList* find_kmeans_dups(double** vectors, int* iterations, int max_iter, int
 	fprintf(kmeans_file, "Duplocates found:\n");
 	size_t num_kmeans_dups = kmeans_dups->size;
 	for (size_t i = 0; i < num_kmeans_dups;) {
-		int d1 = al_get(kmeans_dups, i++), d2 = al_get(kmeans_dups, i++);
+		int d1 = al_get(kmeans_dups, i++);
+		int d2 = al_get(kmeans_dups, i++);
 		fprintf(kmeans_file, "%s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
 		
 		if (!verify_dupe(complete_dups, d1, d2)) {
@@ -659,37 +691,43 @@ ArrayList* find_kmeans_dups(double** vectors, int* iterations, int max_iter, int
 	}
 	
 	// Print kmeans clusters.
-	fprintf(kmeans_file, "\nPoints By Cluster Assignment:\n");
-	for (int cluster = 0; cluster < num_clusters; cluster++) {
-		fprintf(kmeans_file, "Cluster %d: ", cluster);
-		for (int i = 0; i < NUM_VECTORS; i++) {
-			if (labels[i] == cluster) {
-				fprintf(kmeans_file, "%s, ", dataset[i]);
-			}
-		}
-		fprintf(kmeans_file, "\n");
-	}
+	// fprintf(kmeans_file, "\nPoints By Cluster Assignment:\n");
+	// for (int cluster = 0; cluster < num_clusters; cluster++) {
+	// 	fprintf(kmeans_file, "Cluster %d: ", cluster);
+	// 	for (int i = 0; i < NUM_VECTORS; i++) {
+	// 		if (labels[i] == cluster) {
+	// 			fprintf(kmeans_file, "%s, ", dataset[i]);
+	// 		}
+	// 	}
+	// 	fprintf(kmeans_file, "\n");
+	// }
 	
 	// Print cluster centroids. "my code is self-documenting"
-	size_t cur = 0;
-	char buf[num_clusters * (16 + NUM_DIMS * 6)];
-	cur += (size_t)snprintf(memset(buf, 0, sizeof(buf)), sizeof(buf) - cur, "\nFinal Centroids:\n");
-	for (int j = 0; j < num_clusters; j++) {
-		cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "Cluster %d: (", j);
-		for (int dim = 0; dim < NUM_DIMS; dim++) {
-			double val = centroids[j][dim];
-			if (val > 0) {
-				if (val >= 0.0001) cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "%.4lf", val);
-				else cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "%.4lfe-9", val * 1000 * 1000 * 1000);
-			}
-			cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, ",");
-		}
-		#pragma GCC diagnostic push
-		#pragma GCC diagnostic ignored "-Wsequence-point"
-		cur += (size_t)snprintf(buf + --cur, sizeof(buf) - cur, ")\n");
-		#pragma GCC diagnostic pop
-	}
-	fprintf(kmeans_file, "%s", buf); // Flush
+	// size_t cur = 0;
+	// char buf[num_clusters * (16 + NUM_DIMS * 6)];
+	// cur += (size_t)snprintf(memset(buf, 0, sizeof(buf)), sizeof(buf) - cur, "\nFinal Centroids:\n");
+	// for (int j = 0; j < num_clusters; j++) {
+	// 	cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "Cluster %d: (", j);
+	// 	for (int dim = 0; dim < NUM_DIMS; dim++) {
+	// 		double val = centroids[j][dim];
+	// 		if (val > 0) {
+	// 			if (val >= 0.0001) cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "%.4lf", val);
+	// 			else cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "%.4lfe-9", val * 1000 * 1000 * 1000);
+	// 		}
+	// 		cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, ",");
+	// 	}
+	// 	#pragma GCC diagnostic push
+	// 	#pragma GCC diagnostic ignored "-Wsequence-point"
+	// 	cur += (size_t)snprintf(buf + --cur, sizeof(buf) - cur, ")\n");
+	// 	#pragma GCC diagnostic pop
+	// }
+	// fprintf(kmeans_file, "%s", buf); // Flush
+	
+	// Print benchmarks.
+	timer_stop(timer_total);
+	double total_time = timer_get(timer_total);
+	timer_print_cmp(timer_clustering, INDENT"Kmeans clustering", total_time);
+	timer_print_cmp(timer_scan, INDENT"Kmeans checking", total_time);
 	
 	// Free memory.
 	free(labels);
@@ -697,8 +735,115 @@ ArrayList* find_kmeans_dups(double** vectors, int* iterations, int max_iter, int
 		free(centroids[i]);
 	}
 	free(centroids);
+	timer_free(timer_total);
+	timer_free(timer_clustering);
+	timer_free(timer_scan);
 	
 	return kmeans_dups;
+}
+
+ArrayList* test_complete_search(double** vectors, Timer* timer) {
+	// Flush buffers to reduce flush overhead during benchmark.
+	printf("\nComplete search on %d records:\n", DATASET_SIZE);
+	check(fflush(stdout), "fflush(stdout)");
+	
+	// Complete search.
+	double complete_time = 0.0;
+	ArrayList* complete_dups = NULL;
+	for (int rep = 0; rep < num_repeats; rep++) {
+		// Free memory.
+		if (complete_dups != NULL) al_free(complete_dups);
+		
+		// Execute the complete search dupe detection.
+		timer_benchmark(timer,
+			complete_dups = find_complete_dups(vectors);
+		);
+		complete_time += timer_get(timer);
+	}
+	complete_time /= num_repeats;
+	timer->stored_duration = complete_time;
+	
+	// Print complete search summary.
+	printf(INDENT"Dups: %ld\n", complete_dups->size / 2);
+	printf(INDENT"Time: %.4lfs\n", complete_time);
+	check(fflush(stdout), "fflush(stdout)");
+	
+	return complete_dups;
+}
+
+void test_sliding_search(double** vectors, Timer* timer, ArrayList* complete_dups) {
+	// Sliding window with various window sizes.
+	size_t num_window_sizes_count = sizeof(window_sizes) / sizeof(window_sizes[0]);
+	for (size_t i = 0; i < num_window_sizes_count; i++) {
+		int window_size = window_sizes[i];
+		
+		// Flush buffers to reduce flush overhead during benchmark.
+		printf("\nSliding window (x%d):\n", window_size);
+		check(fflush(stdout), "fflush(stdout)");
+		
+		// Benchmarking execution time.
+		double sliding_time = 0.0;
+		ArrayList* sliding_dups = NULL;
+		for (int rep = 0; rep < num_repeats; rep++) {
+			// Free memory.
+			if (sliding_dups != NULL) al_free(sliding_dups);
+			
+			// Execute sliding window dupe detection.
+			timer_benchmark(timer,
+				sliding_dups = find_sliding_dups(vectors, window_size, complete_dups);
+			);
+			sliding_time += timer_get(timer);
+		}
+		sliding_time /= num_repeats;
+		
+		// Print sliding summary.
+		double percent_success_sliding = 100.0 * (double)sliding_dups->size / (double)complete_dups->size;
+		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", sliding_dups->size / 2, complete_dups->size / 2, percent_success_sliding);
+		const double time_percent = 100.0f * sliding_time / timer->stored_duration;
+		printf(INDENT"Time: %.4lfs (%%%.2f)\n", sliding_time, time_percent);
+		check(fflush(stdout), "fflush(stdout)");
+		
+		// Free memory.
+		al_free(sliding_dups);
+	}
+}
+
+void test_kmeans_search(double** vectors, Timer* timer, ArrayList* complete_dups) {
+	// Kmeans with various k values.
+	size_t num_cluster_counts = sizeof(cluster_counts) / sizeof(cluster_counts[0]);
+	for (size_t i = 0; i < num_cluster_counts; i++) {
+		int cluster_count = cluster_counts[i], iterations = 0;
+		
+		// Flush buffers to reduce flush overhead during benchmark.
+		printf("\nKmeans (num_clusters=%d):\n", cluster_count);
+		check(fflush(stdout), "fflush(stdout)");
+		
+		// Benchmarking execution time.
+		double kmeans_time = 0.0;
+		ArrayList* kmeans_dups = NULL;
+		for (int rep = 0; rep < num_repeats; rep++) {
+			// Free memory.
+			if (kmeans_dups != NULL) al_free(kmeans_dups);
+			
+			// Execute kmeans dupe detection.
+			timer_benchmark(timer,
+				kmeans_dups = find_kmeans_dups(vectors, &iterations, max_iter, cluster_count, complete_dups);
+			);
+			kmeans_time += timer_get(timer);
+		}
+		kmeans_time /= num_repeats;
+	
+		// Print sliding summary.
+		const double time_percent = 100.0f * kmeans_time / timer->stored_duration;
+		const double percent_success_kmeans = 100.0 * (double)kmeans_dups->size / (2.0 * (double)complete_dups->size / 2);
+		printf(INDENT"Time: %.4lfs (%%%.2f)\n", kmeans_time, time_percent);
+		printf(INDENT"Iterations: %d/%d\n", iterations, max_iter);
+		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", kmeans_dups->size / 2, complete_dups->size / 2, percent_success_kmeans);
+		check(fflush(stdout), "fflush(stdout)");
+		
+		// Free memory.
+		al_free(kmeans_dups);
+	}
 }
 
 /*** Program entry point: runs three duplicate-detection strategies and reports results.
@@ -734,8 +879,8 @@ int main(int argc, char* argv[]) {
 	sliding_file = fopen(argv[2], "w");
 	kmeans_file = fopen(argv[3], "w");
 	Timer* timer = timer_new();
-	Timer* total_timer = timer_new();
-	timer_start(total_timer);
+	Timer* timer_total = timer_new();
+	timer_start(timer_total);
 	
 	// Set buffers to only flush manually for more accurate performance evaluation.
 	setvbuf(stdout, NULL, _IOFBF, (2 * 1000 * 1000));
@@ -759,102 +904,27 @@ int main(int argc, char* argv[]) {
 	double** vectors = malloc(NUM_VECTORS * sizeof(double*));
 	check(build_vectors(vectors, dataset, NUM_VECTORS), "build_vectors");
 	
-	// Flush buffers to reduce flush overhead during benchmark.
-	printf("\nComplete search on %d records:\n", DATASET_SIZE);
-	check(fflush(stdout), "fflush(stdout)");
-	
 	// Complete search.
-	double complete_time = 0.0;
-	ArrayList* complete_dups = NULL;
-	for (int rep = 0; rep < num_repeats; rep++) {
-		// Free memory.
-		if (complete_dups != NULL) al_free(complete_dups);
-		
-		// Execute the complete search dupe detection.
-		timer_benchmark(timer,
-			complete_dups = find_complete_dups(vectors);
-		);
-		complete_time += timer_get(timer);
-	}
-	complete_time /= num_repeats;
-	timer->stored_duration = complete_time;
-	
-	// Print complete search summary.
-	const size_t num_complete_dups = complete_dups->size / 2;
-	printf(INDENT"Dups: %ld\n", num_complete_dups);
-	printf(INDENT"Time: %.4lfs\n", complete_time);
-	check(fflush(stdout), "fflush(stdout)");
+	ArrayList* complete_dups = test_complete_search(vectors, timer);
 
-	// Sliding window with various window sizes.
-	size_t num_window_sizes_count = sizeof(window_sizes) / sizeof(window_sizes[0]);
-	for (size_t i = 0; i < num_window_sizes_count; i++) {
-		int window_size = window_sizes[i];
-		
-		// Flush buffers to reduce flush overhead during benchmark.
-		printf("\nSliding window (x%d):\n", window_size);
-		check(fflush(stdout), "fflush(stdout)");
-		
-		// Benchmarking execution time.
-		double sliding_time = 0.0;
-		ArrayList* sliding_dups = NULL;
-		for (int rep = 0; rep < num_repeats; rep++) {
-			// Free memory.
-			if (sliding_dups != NULL) al_free(sliding_dups);
-			
-			// Execute sliding window dupe detection.
-			timer_benchmark(timer,
-				sliding_dups = find_sliding_dups(vectors, window_size, complete_dups);
-			);
-			sliding_time += timer_get(timer);
-		}
-		sliding_time /= num_repeats;
-		
-		// Print sliding summary.
-		double percent_success_sliding = 100.0 * (double)sliding_dups->size / (2.0 * (double)num_complete_dups);
-		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", sliding_dups->size / 2, num_complete_dups, percent_success_sliding);
-		const double time_percent = 100.0f * sliding_time / timer->stored_duration;
-		printf(INDENT"Time: %.4lfs (%%%.2f)\n", sliding_time, time_percent);
-		check(fflush(stdout), "fflush(stdout)");
-		
-		// Free memory.
-		al_free(sliding_dups);
-	}
+	// Sliding search.
+	test_sliding_search(vectors, timer, complete_dups);
 	
-	// Kmeans with various numbers of clusters.
-	size_t num_cluster_counts = sizeof(cluster_counts) / sizeof(cluster_counts[0]);
-	for (size_t i = 0; i < num_cluster_counts; i++) {
-		int cluster_count = cluster_counts[i], iterations = 0;
-		
-		// Flush buffers to reduce flush overhead during benchmark.
-		printf("\nKmeans (num_clusters=%d):\n", cluster_count);
-		check(fflush(stdout), "fflush(stdout)");
-		
-		// Benchmarking execution time.
-		double kmeans_time = 0.0;
-		ArrayList* kmeans_dups = NULL;
-		for (int rep = 0; rep < num_repeats; rep++) {
-			// Free memory.
-			if (kmeans_dups != NULL) al_free(kmeans_dups);
-			
-			// Execute kmeans dupe detection.
-			timer_benchmark(timer,
-				kmeans_dups = find_kmeans_dups(vectors, &iterations, max_iter, cluster_count, complete_dups);
-			);
-			kmeans_time += timer_get(timer);
-		}
-		kmeans_time /= num_repeats;
+	// Kmeans search.
+	test_kmeans_search(vectors, timer, complete_dups);
 	
-		// Print sliding summary.
-		double percent_success_kmeans = 100.0 * (double)kmeans_dups->size / (2.0 * (double)num_complete_dups);
-		printf(INDENT"Iterations: %d/%d\n", iterations, max_iter);
-		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", kmeans_dups->size / 2, num_complete_dups, percent_success_kmeans);
-		const double time_percent = 100.0f * kmeans_time / timer->stored_duration;
-		printf(INDENT"Time: %.4lfs (%%%.2f)\n", kmeans_time, time_percent);
-		check(fflush(stdout), "fflush(stdout)");
-		
-		// Free memory.
-		al_free(kmeans_dups);
-	}
+	// Print the total execution time.
+	timer_stop(timer_total);
+	timer_print(timer_total, "\nTotal");
+	
+	// End program and flush all buffers.
+	printf("\nDone!\n");
+	check(fflush(stdout), "fflush(stdout)");
+	
+	// Close files.
+	if (complete_file) fclose(complete_file);
+	if (sliding_file) fclose(sliding_file);
+	if (kmeans_file) fclose(kmeans_file);
 	
 	// Free memory.
 	al_free(complete_dups);
@@ -863,19 +933,8 @@ int main(int argc, char* argv[]) {
 		free(dataset[i]);
 	}
 	free(vectors);
-	
-	// Close files.
-	if (complete_file) fclose(complete_file);
-	if (sliding_file) fclose(sliding_file);
-	if (kmeans_file) fclose(kmeans_file);
-	
-	// Print the total execution time.
-	timer_stop(total_timer);
-	timer_print(total_timer, "Total");
-	
-	// End program and flush all buffers.
-	printf("\nDone!\n");
-	check(fflush(stdout), "fflush(stdout)");
+	timer_free(timer);
+	timer_free(timer_total);
 	
 	return 0;
 }

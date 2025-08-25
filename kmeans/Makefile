@@ -52,13 +52,13 @@ preprocess: $(PRE)
 	code $^
 
 $(PRE): $(SRC)
-	$(CC) -E -o $@ $^ $(CFLAGS_ALL) -O0
+	$(CC) -E -o $@ $^ $(CFLAGS_DEBUG)
 
 asm: $(ASM)
 	code $^
 
 $(ASM): $(SRC)
-	$(CC) -S -o $@ $^ $(CFLAGS_FAST)
+	$(CC) -S -o $@ $^ $(CFLAGS_FAST) -g
 
 $(BIN_DEBUG): $(LIBOS) $(SRC)
 	$(CC) -o $@ $^ $(CFLAGS_DEBUG)
