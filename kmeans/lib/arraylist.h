@@ -11,7 +11,7 @@ typedef struct {
 	size_t size;
 	size_t capacity;
 	bool is_locked;
-	int* data;
+	unsigned int* data;
 } ArrayList;
 
 // Constructors
@@ -21,8 +21,8 @@ ArrayList* al_new(void);
 ArrayList* al_newc(size_t initial_capacity);
 
 // Member methods
-void al_add(ArrayList* list, int element);
-int  al_get(ArrayList* list, size_t index);
+void al_add(ArrayList* list, unsigned int element);
+unsigned int  al_get(ArrayList* list, size_t index);
 void al_lock(ArrayList* list);
 void al_unlock(ArrayList* list);
 void al_trim_to_size(ArrayList* list);

@@ -15,7 +15,7 @@ ArrayList* al_initc(ArrayList* list, size_t initial_capacity) {
 		fprintf(stderr, "[ArrayList] al_initc() - Increasing initial capacity from requested (%ld) to minimum (%ld).\n", initial_capacity, AL_MIN_CAPACITY);
 	}
 
-	list->data = malloc(initial_capacity * sizeof(int));
+	list->data = malloc(initial_capacity * sizeof(unsigned int));
 	if (list->data == NULL) {
 		free(list);
 		return NULL;
@@ -38,13 +38,13 @@ ArrayList* al_newc(size_t initial_capacity) {
 
 static void al_ensure_capacity(ArrayList* list, size_t min_capacity) {
 	while (list->capacity < min_capacity) {
-		size_t new_size = (list->capacity *= 2) * sizeof(int);
-		list->data = (int*)realloc(list->data, new_size);
+		size_t new_size = (list->capacity *= 2) * sizeof(unsigned int);
+		list->data = (unsigned int*)realloc(list->data, new_size);
 		if (list->data == NULL) fprintf(stderr, "[ArrayList] al_ensure_capacity() - realloc(%ld) failed!\n", new_size);
 	}
 }
 
-void al_add(ArrayList* list, int element) {
+void al_add(ArrayList* list, unsigned int element) {
 	if (list->is_locked) {
 		fprintf(stderr, "[ArrayList] al_add() - Attempted to add %d to locked list of size %ld.\n", element, list->size);
 		return;
@@ -53,10 +53,10 @@ void al_add(ArrayList* list, int element) {
 	list->data[list->size++] = element;
 }
 
-int al_get(ArrayList* list, size_t index) {
+unsigned int al_get(ArrayList* list, size_t index) {
 	if (index >= list->size) {
 		fprintf(stderr, "[ArrayList] al_get() - Index %ld out of bounds for length %ld!\n", index, list->size);
-		return -1; // Fail
+		return 0; // Fail
 	}
 	return list->data[index];
 }
@@ -71,8 +71,8 @@ void al_unlock(ArrayList* list) {
 
 void al_trim_to_size(ArrayList* list) {
 	if (list->size < list->capacity) {
-		size_t new_size_bytes = (list->capacity = max(AL_MIN_CAPACITY, list->size)) * sizeof(int);
-		list->data = (int*)realloc(list->data, new_size_bytes);
+		size_t new_size_bytes = (list->capacity = max(AL_MIN_CAPACITY, list->size)) * sizeof(unsigned int);
+		list->data = (unsigned int*)realloc(list->data, new_size_bytes);
 		if (list->data == NULL) fprintf(stderr, "[ArrayList] al_trim_to_size() - realloc(%ld) failed!\n", new_size_bytes);
 		list->capacity = list->size;
 	}

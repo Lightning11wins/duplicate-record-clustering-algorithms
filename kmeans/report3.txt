@@ -1,0 +1,181 @@
+Begin!
+
+Settings:
+	> Dataset (x1000000): datasets/forenames.txt
+	> Dimensions: 251
+	> Similarity Threshold: 0.7500
+
+Complete search on 100 records:
+	> Dups: 2
+	> Time: 0.0034s
+
+Kmeans (num_clusters=4):
+	> Kmeans clustering time: 0.0022s (%67.66).
+	> Kmeans checking time: 0.0010s (%32.05).
+	> Time: 0.0032s (%93.24)
+	> Iterations: 7/32
+	> Dups: 2/2 (%100.00)
+
+Kmeans (num_clusters=8):
+	> Kmeans clustering time: 0.0046s (%89.70).
+	> Kmeans checking time: 0.0005s (%10.25).
+	> Time: 0.0051s (%148.71)
+	> Iterations: 8/32
+	> Dups: 2/2 (%100.00)
+
+Kmeans (num_clusters=16):
+	> Kmeans clustering time: 0.0036s (%92.31).
+	> Kmeans checking time: 0.0003s (%7.63).
+	> Time: 0.0039s (%113.39)
+	> Iterations: 3/32
+	> Dups: 1/2 (%50.00)
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 0.0090s (%98.23).
+	> Kmeans checking time: 0.0001s (%1.55).
+	> Time: 0.0091s (%266.68)
+	> Iterations: 4/32
+	> Dups: 1/2 (%50.00)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 0.0128s (%99.48).
+	> Kmeans checking time: 0.0001s (%0.49).
+	> Time: 0.0129s (%376.62)
+	> Iterations: 3/32
+	> Dups: 2/2 (%100.00)
+
+Kmeans (num_clusters=128):
+	> Kmeans clustering time: 0.0259s (%99.83).
+	> Kmeans checking time: 0.0000s (%0.14).
+	> Time: 0.0259s (%756.28)
+	> Iterations: 3/32
+	> Dups: 0/2 (%0.00)
+
+Kmeans (num_clusters=256):
+	> Kmeans clustering time: 0.0534s (%99.95).
+	> Kmeans checking time: 0.0000s (%0.01).
+	> Time: 0.0535s (%1559.51)
+	> Iterations: 3/32
+	> Dups: 0/2 (%0.00)
+
+
+
+
+
+Complete search on 1000 records:
+	> Dups: 211
+	> Time: 0.3426s
+
+Kmeans (num_clusters=4):
+	> Kmeans clustering time: 0.0650s (%38.77).
+	> Kmeans checking time: 0.1025s (%61.16).
+	> Time: 0.1676s (%48.92)
+	> Iterations: 22/32
+	> Dups: 201/211 (%95.26)
+
+Kmeans (num_clusters=8):
+	> Kmeans clustering time: 0.1081s (%68.41).
+	> Kmeans checking time: 0.0498s (%31.47).
+	> Time: 0.1581s (%46.14)
+	> Iterations: 18/32
+	> Dups: 193/211 (%91.47)
+
+Kmeans (num_clusters=16):
+	> Kmeans clustering time: 0.1696s (%87.43).
+	> Kmeans checking time: 0.0242s (%12.50).
+	> Time: 0.1940s (%56.61)
+	> Iterations: 15/32
+	> Dups: 188/211 (%89.10)
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 0.3128s (%95.60).
+	> Kmeans checking time: 0.0143s (%4.36).
+	> Time: 0.3272s (%95.51)
+	> Iterations: 14/32
+	> Dups: 185/211 (%87.68)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 0.4034s (%97.76).
+	> Kmeans checking time: 0.0091s (%2.19).
+	> Time: 0.4126s (%120.44)
+	> Iterations: 9/32
+	> Dups: 181/211 (%85.78)
+
+Kmeans (num_clusters=128):
+	> Kmeans clustering time: 0.6141s (%99.26).
+	> Kmeans checking time: 0.0044s (%0.71).
+	> Time: 0.6187s (%180.59)
+	> Iterations: 7/32
+	> Dups: 167/211 (%79.15)
+
+Kmeans (num_clusters=256):
+	> Kmeans clustering time: 0.8745s (%99.71).
+	> Kmeans checking time: 0.0024s (%0.28).
+	> Time: 0.8771s (%256.00)
+	> Iterations: 5/32
+	> Dups: 149/211 (%70.62)
+
+
+
+
+
+Complete search on 10000 records:
+	> Dups: 22624
+	> Time: 34.7166s
+
+Kmeans (num_clusters=4):
+	> Kmeans clustering time: 0.5442s (%4.69).
+	> Kmeans checking time: 11.0493s (%95.26).
+	> Time: 11.5993s (%33.41)
+	> Iterations: 18/32
+	> Dups: 20772/22624 (%91.81)
+
+Kmeans (num_clusters=8):
+	> Kmeans clustering time: 1.8429s (%25.70).
+	> Kmeans checking time: 5.3222s (%74.22).
+	> Time: 7.1707s (%20.65)
+	> Iterations: 32/32
+	> Dups: 20761/22624 (%91.77)
+
+Kmeans (num_clusters=16):
+	> Kmeans clustering time: 2.8564s (%48.32).
+	> Kmeans checking time: 3.0497s (%51.59).
+	> Time: 5.9112s (%17.03)
+	> Iterations: 25/32
+	> Dups: 19935/22624 (%88.11)
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 7.1205s (%81.86).
+	> Kmeans checking time: 1.5731s (%18.08).
+	> Time: 8.6988s (%25.06)
+	> Iterations: 32/32
+	> Dups: 18680/22624 (%82.57)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 12.9729s (%94.05).
+	> Kmeans checking time: 0.8153s (%5.91).
+	> Time: 13.7930s (%39.73)
+	> Iterations: 30/32
+	> Dups: 18023/22624 (%79.66)
+
+Kmeans (num_clusters=128):
+	> Kmeans clustering time: 13.7228s (%96.55).
+	> Kmeans checking time: 0.4863s (%3.42).
+	> Time: 14.2137s (%40.94)
+	> Iterations: 16/32
+	> Dups: 17525/22624 (%77.46)
+
+Kmeans (num_clusters=256):
+	> Kmeans clustering time: 39.7749s (%99.30).
+	> Kmeans checking time: 0.2753s (%0.69).
+	> Time: 40.0548s (%115.38)
+	> Iterations: 23/32
+	> Dups: 15732/22624 (%69.54)
+
+
+
+
+
+Total time: 140.8918s.
+
+Done!
