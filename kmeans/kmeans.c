@@ -12,8 +12,8 @@
 #include "lib/utils.h"
 
 // Define the dataset.
-#define DATASET_PATH "datasets/surnames.txt"
-#define DATASET_SIZE 1000 * 1000
+// #define DATASET_PATH "datasets/surnames.txt"
+// #define DATASET_SIZE 1000 * 1000
 // #define DATASET_PATH "datasets/word_scrape.txt"
 // #define DATASET_SIZE 19734
 // #define DATASET_PATH "datasets/blackholes.txt"
@@ -22,18 +22,18 @@
 // #define DATASET_SIZE 1257
 
 #define INDENT "\t> "
-#define NUM_DIMS 251               // The number of dimensions used for clustering data.
-#define SEED 1621963727            // The seed used for randomly selecting centroids.
+#define NUM_DIMS 251
+#define SEED 1621963727
 #define THRESHOLD 0.75
+#define KMEANS_IMPROVEMENT_THRESHOLD 0.0010
 
 // Test Parameters
 unsigned int window_sizes[] = {3, 6, 16, 32, 64, 256};
 unsigned int cluster_counts[] = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
-unsigned int dataset_sizes[] = {100, 1000};//, 10000, 100000, 1000000};
+unsigned int dataset_sizes[] = {5000, 10000};//, 50000, 100000, 1000000};
 unsigned int max_iter = 64;
 unsigned int num_repeats = 1; // Repeat algorithms to reduce randomness.
 
-char* dataset[DATASET_SIZE];
 FILE* complete_file = NULL;
 FILE* sliding_file = NULL;
 FILE* kmeans_file = NULL;
@@ -46,6 +46,19 @@ FILE* kmeans_file = NULL;
  *** i: The number of kmeans iterations.
  *** s: The number of records in the average cluster.
  ***/
+
+ 
+void fprint_vector(FILE* file, const double* vector) {
+	for (unsigned int j = 0, idx = 0; idx < NUM_DIMS; j++) {
+		if (vector[j] >= 0.001) { fprintf(file, " % 3g,", vector[j]); idx++; }
+		else {
+			unsigned int num = (unsigned int)(-vector[j]);
+			idx += num;
+			repeat(num, k) fprintf(file, "    ,");
+		}
+	}
+	fprintf(file, "\n");
+}
 
 // ====================================
 // Centralix Code
@@ -65,8 +78,8 @@ FILE* kmeans_file = NULL;
  * Assumptions
  * 	Both arguments are positive.
  */
-int exp_fn_i_hash_char_pair(double num1, double num2) {
-	int hash = (int)round(((num1 * num1 * num1) + (num2 * num2 * num2)) * ((num1 + 1) / (num2 + 1))) - 1;
+unsigned int exp_fn_i_hash_char_pair(double num1, double num2) {
+	unsigned int hash = (unsigned int)(round(((num1 * num1 * num1) + (num2 * num2 * num2)) * ((num1 + 1) / (num2 + 1)))) - 1;
 	return hash % NUM_DIMS;
 }
 
@@ -131,18 +144,18 @@ int exp_fn_i_magnitude(double* magnitude_ptr, const double* r_freq_table) {
  * 
  * LINK ../../centrallix-sysdoc/string_comparison.md#exp_fn_i_frequency_table
  */
-int exp_fn_i_frequency_table(double* table, char* term) {
+int exp_fn_i_frequency_table(double* table, char* str) {
 	// Initialize hash table with 0 values
-	for (int i = 0; i < NUM_DIMS; i++) table[i] = 0;
+	for (size_t i = 0; i < NUM_DIMS; i++) table[i] = 0;
 	
 	// j is the former character, i is the latter.
-	int num_terms = (int)strlen(term);
-	for (int j = -1, i = 0; i <= num_terms; i++) {
+	int num_strs = (int)strlen(str);
+	for (int j = -1, i = 0; i <= (int)num_strs; i++) {
 		// If latter character is punctuation or whitespace, skip it.
-		if (ispunct(term[i]) || isspace(term[i])) continue;
+		if (ispunct(str[i]) || isspace(str[i])) continue;
 
-		int temp1 = (j == -1) ? '`' : (int)tolower(term[j]);
-		int temp2 = (i == num_terms) ? '`' : (int)tolower(term[i]);
+		unsigned int temp1 = (j == -1) ? '`' : (unsigned int)tolower(str[j]);
+		unsigned int temp2 = (i == num_strs) ? '`' : (unsigned int)tolower(str[i]);
 
 		// If either character is a number, reassign the code point
 		// The significance of 75 here seems to be that it puts the numbers
@@ -152,7 +165,7 @@ int exp_fn_i_frequency_table(double* table, char* term) {
 		if ('0' <= temp2 && temp2 <= '9') temp2 += 75;
 		
 		// Hash the character pair into an index.
-		int index = exp_fn_i_hash_char_pair(temp1, temp2);
+		unsigned int index = exp_fn_i_hash_char_pair((double)temp1, (double)temp2);
 		
 		// Increment Frequency Table value by number from 1 to 13.
 		table[index] += (temp1 + temp2) % 13 + 1;
@@ -206,54 +219,179 @@ double* create_vector(void) {
  ***/
 int build_vectors(double** vectors, char** strs, unsigned int num_vectors) {
 	for (unsigned int i = 0; i < num_vectors; i++) {
-		double* vector = vectors[i] = create_vector();
+		// Build dense vectors.
+		double* vector = create_vector();
 		check(exp_fn_i_frequency_table(vector, strs[i]), "exp_fn_i_frequency_table");
+		
+		// Count how much space is needed for a sparse vector.
+		bool zero_prev = false;
+		unsigned int size = 0;
+		repeat(NUM_DIMS, j) {
+			if (vector[j] < 0.001) {
+				size += (zero_prev) ? 0 : 1;
+				zero_prev = true;
+			} else {
+				size++;
+				zero_prev = false;
+			}
+		}
+
+		// Convert them to sparse vectors.
+    	double* sparse = vectors[i] = (double*)malloc(size * sizeof(double));
+    	if (!sparse) fprintf(stderr, "malloc(%u) - FAIL", size);
+		size_t j = 0, sparse_idx = 0;
+		while (j < NUM_DIMS) {
+			if (vector[j] <= 0.001) {
+				// Count and store consecutive zeros.
+				size_t zero_count = 0;
+				while (j < NUM_DIMS && vector[j] < 0.001) {
+					zero_count++;
+					j++;
+				}
+				sparse[sparse_idx++] = -(double)zero_count;
+			} else {
+				// Store the value
+				sparse[sparse_idx++] = vector[j++];
+			}
+		}
+		
+		// Free unused data.
+		free(vector);
 	}
 	return 0;
 }
 
-/*** Calculates the cosine similarity, aka. the angle between the two
- *** vectors in n dimensional space (where n is NUM_DIMS). In other words,
- *** `similarity(A, B)` performs the function `cos(θ) = (A. B)/(|A| |B|)`
- *** where A and B are vectors.
- ***
- *** Assumes all dimensions of both parameters are assumed to be strictly positive.
- ***
- *** @param v1 The first vector being compared.
- *** @param v2 The second vector being compared.
- *** @returns {0 - 1} where 0 indicates that the vectors (and the strings they
- ***          represent) have no similarity and 1 indicates that they are identical.
+/*** Compute the value for `k` (number of clusters), given a dataset of with
+ *** a size of `n`.
  *** 
- *** Complexity: `O(3d)`
+ *** The following table shows data sizes vs. our aproximate guess at the
+ *** best cluster size vs. the actual cluster size picked by the function.
+ *** 
+ *** ```csv
+ *** Data Size, Guess, Actual
+ *** 10k,       16,    10
+ *** 100k,      32,    29
+ *** 1M,        64,    57
+ *** ```
+ *** 
+ *** Notice that this function consistantly undershoots the guessed optimal
+ *** values. This is intentional. Fewer clusters, while slightly slower, gives
+ *** better detection accuracy. Thus, this function is designed to air on the
+ *** lower side, especially for smaller data sizes where the loss in speed is
+ *** likely to be neglegable.
+ *** 
+ *** This function is not intended for datasets smaller than (`n < ~2000`).
+ *** These should be handled using complete search.
+ *** 
+ *** @param n The size of the dataset.
+ *** @returns k, the number of clusters to use.
  ***/
-double similarity(const double* v1, const double* v2) {
-	// Calculate dot product
-	double dot_product = 0;
-	check(exp_fn_i_dot_product(&dot_product, v1, v2), "exp_fn_i_dot_product");
-	
-	// Calculate magnitudes of each relative frequency vector
-	double magnitude1 = 0;
-	double magnitude2 = 0;
-	check(exp_fn_i_magnitude(&magnitude1, v1), "exp_fn_i_magnitude");
-	check(exp_fn_i_magnitude(&magnitude2, v2), "exp_fn_i_magnitude");
-
-	// Calculate the similarity score
-	return fabs(dot_product) / (magnitude1 * magnitude2);
+unsigned int compute_k(unsigned int n) {
+	return max(2u, (unsigned int)pow(log(n) / log(36), 3.1) - 8u);
 }
 
-/*** Inverts the cosine similarity such that more similar vectors produce a
- *** smaller value instead of a larger value.
- ***
- *** Assumes all dimensions of both parameters are assumed to be strictly positive.
- ***
- *** @param v1 The first vector being compared.
- *** @param v2 The second vector being compared.
- *** @returns {0 - 1}: where 0 indicates that the vectors (and the strings they
- ***          represent) are identical and 1 indicates that they have no similarity.
+#define is_neg(val) (val < -0.001)
+
+double magnitude(const double* vector) {
+	double magnitude = 0.0;
+	for (unsigned int i = 0, dim = 0; dim < NUM_DIMS;) {
+		const double val = vector[i++];
+		
+		// Negative val represents -val 0s in the array, so skip that many values. 
+		if (is_neg(val)) dim += (unsigned int)(-val);
+		
+		// We have a value, so square it and add it to the magnitude.
+		else {magnitude += val * val; dim++;}
+	}
+	return sqrt(magnitude);
+}
+
+double magnitude_dense(const double* vector) {
+	double magnitude = 0.0;
+	for (int i = 0; i < NUM_DIMS; i++) {
+		magnitude += vector[i] * vector[i];
+	}
+	return sqrt(magnitude);
+}
+
+void parse_token(double token, size_t* remaining, double* value) {
+	if (is_neg(token)) {
+		// This run contains -token zeros.
+		*remaining = (size_t)llround(-token);
+		*value = 0.0;
+	} else {
+		// This run contains one value.
+		*remaining = 1;
+		*value = token;
+	}
+}
+
+double check_sim(double sim, const char* note, const double* v1, const double* v2) {
+	if (sim < 0.0 || 1.000000001 < sim) {
+		fprintf(stdout, "Strange similarity%s %g.\n", note, sim);
+		fprintf(stdout, "v1:\t"); fprint_vector(stdout, v1);
+		fprintf(stdout, "v2:\t"); fprint_vector(stdout, v2);
+		fprintf(stdout, "\n");
+		fflush(stdout);
+	}
+	return sim; // Chain calling.
+}
+
+/*** Calculate similarity on sparce vectors.
+ *** 
+ *** @param v1 Sparse vector 1.
+ *** @param v1 Sparse vector 2.
+ *** @returns Similarity between 0 and 1 where
+ *** 	1 indicates completely different and
+ *** 	0 indicates identical.
  *** 
  *** Complexity: `O(3d)`
  ***/
-#define difference(v1, v2) (1.0 - similarity((v1), (v2)))
+double sparse_similarity(const double* v1, const double* v2) {
+	// Calculate dot product
+	double val1 = 0.0, val2 = 0.0, dot_product = 0.0;
+	size_t vec1_remaining = 0, vec2_remaining = 0;
+	size_t dim = 0, i1 = 0, i2 = 0;
+	while (dim < NUM_DIMS) {
+		if (vec1_remaining == 0) parse_token(v1[i1++], &vec1_remaining, &val1);
+		if (vec2_remaining == 0) parse_token(v2[i2++], &vec2_remaining, &val2);
+
+		// Accumulate the dot_product. If either vector is 0 here,
+		// the total is 0 and this statement does nothing.
+		dot_product += val1 * val2;
+		
+		// Consume overlap from both runs.
+		size_t overlap = min(vec1_remaining, vec2_remaining);
+		vec1_remaining -= overlap;
+		vec2_remaining -= overlap;
+		dim += overlap;
+	}
+	
+	// Optional optimization to speed up nonsimilar vectors.
+	if (dot_product < 0.001) return 0.0;
+	
+	// Return the difference score.
+	return check_sim(fabs(dot_product) / (magnitude(v1) * magnitude(v2)), "", v1, v2);
+}
+// #define sparse_dif(v1, v2) (1.0 - sparse_similarity(v1, v2))
+
+double sparse_similarity_c(const double* v1, const double* c2) {
+	// Calculate dot product
+	double dot_product = 0.0;
+	for (unsigned int i = 0, dim = 0; dim < NUM_DIMS;) {
+		const double val = v1[i++];
+		
+		// Negative val represents -val 0s in the array, so skip that many values. 
+		if (is_neg(val)) dim += (unsigned int)(-val);
+		
+		// We have a value, so square it and add it to the magnitude.
+		else dot_product += val * c2[dim++];
+	}
+	
+	// Return the difference score.
+	return check_sim(fabs(dot_product) / (magnitude(v1) * magnitude_dense(c2)), "_c", v1, c2);
+}
+#define sparse_dif_c(v1, c2) (1.0 - sparse_similarity_c(v1, c2))
 
 /*** Calculate the average size of all clusters in a set of vectors.
  ***
@@ -261,9 +399,9 @@ double similarity(const double* v1, const double* v2) {
  *** @param num_vectors The number of vectors in the dataset.
  *** @param labels The clusters to which vectors are assigned.
  *** @param centroids The locations of the centroids.
- *** @returns 0, success
+ *** @returns The average cluster size.
  ***/
-int print_cluster_size(double** vectors, unsigned int num_vectors, unsigned int* labels, double** centroids, unsigned int num_clusters, unsigned int iteration) {
+double print_cluster_size(double** vectors, unsigned int num_vectors, unsigned int* labels, double** centroids, unsigned int num_clusters, unsigned int iteration) {
 	double cluster_sums[num_clusters];
 	double noncluster_sums[num_clusters];
 	unsigned int cluster_counts[num_clusters];
@@ -275,12 +413,12 @@ int print_cluster_size(double** vectors, unsigned int num_vectors, unsigned int*
 	for (unsigned int i = 0; i < num_vectors; i++) {
 		unsigned int label = labels[i];
 		double* vector = vectors[i];
-		cluster_sums[label] += difference(vector, centroids[label]);
+		cluster_sums[label] += sparse_dif_c(vector, centroids[label]);
 		cluster_counts[label]++;
 		
 		for (unsigned int j = 0; j < num_clusters; j++) {
 			if (j == label) continue;
-			noncluster_sums[j] += difference(vector, centroids[j]);
+			noncluster_sums[j] += sparse_dif_c(vector, centroids[j]);
 		}
 	}
 	
@@ -315,26 +453,31 @@ int print_cluster_size(double** vectors, unsigned int num_vectors, unsigned int*
 		}
 	}
 	
-	// Final print
-	if (valid_clusters > 0) {
-		double average_cluster_size = cluster_total / valid_clusters;
-		double average_noncluster_size = noncluster_total / valid_clusters;
-		
-		fprintf(kmeans_file,
-			"\nkmeans #%d:\n"
-				INDENT"Average cluster: %.4lf\n"
-				INDENT"Average noncluster: %.4lf\n"
-				INDENT"Largest cluster: #%d @ %.4lf\n"
-				INDENT"Smallest cluster: #%d @ %.4lf\n",
-			iteration,
-			average_cluster_size,
-			average_noncluster_size,
-			max_cluster_label, max_cluster_size,
-			min_cluster_label, min_cluster_size
-		);
-	} else printf("kmeans #%d: No valid clusters!\n", iteration);
+	// Verify that there are valid clusters.
+	if (valid_clusters <= 0) {
+		printf("kmeans #%u: No valid clusters!\n", iteration);
+		return 0.0;
+	}
 	
-	return 0;
+	// Calculate average sizes.
+	double average_cluster_size = cluster_total / valid_clusters;
+	double average_noncluster_size = noncluster_total / valid_clusters;
+	
+	// Print data
+	fprintf(kmeans_file,
+		"\nkmeans #%u:\n"
+			INDENT"Average cluster: %.4lf\n"
+			INDENT"Average noncluster: %.4lf\n"
+			INDENT"Largest cluster: #%d @ %.4lf\n"
+			INDENT"Smallest cluster: #%d @ %.4lf\n",
+		iteration,
+		average_cluster_size,
+		average_noncluster_size,
+		max_cluster_label, max_cluster_size,
+		min_cluster_label, min_cluster_size
+	);
+	
+	return average_cluster_size;
 }
 
 /*** Executes the k-means clustering algorithm. Selects NUM_CLUSTERS random
@@ -372,17 +515,21 @@ int print_cluster_size(double** vectors, unsigned int num_vectors, unsigned int*
  *** 
  *** - `O(nk + nd)`
  ***/
-void kmeans(double** vectors, unsigned int num_vectors, unsigned int* labels, double** centroids, unsigned int* iterations, unsigned int max_iter, unsigned int num_clusters) {
+void kmeans(double** vectors, unsigned int num_vectors, unsigned int* labels, double** centroids, unsigned int* iterations, unsigned int max_iter, unsigned int num_clusters, double* debug_time) {
 	// Select random vectors to use as the initial centroids.
 	srand(SEED);
 	for (unsigned int i = 0; i < num_clusters; i++) {
 		// Pick a random vector.
 		const unsigned int random_index = (unsigned int)rand() % num_vectors;
-		// fprintf(kmeans_file, "Centroid %d starts at vector %d.\n", i, random_index); // Debug
+		// fprintf(kmeans_file, "Centroid %u starts at vector %u.\n", i, random_index); // Debug
 		
-		// Copy each dimetion from the selected random vector to the current centroid.
-		for (unsigned int dim = 0; dim < NUM_DIMS; dim++) {
-			centroids[i][dim] = vectors[random_index][dim];
+		// Sparse copy the vector into a densely allocated centroid.
+		double* centroid = centroids[i];
+		double* vector = vectors[random_index];
+		for (int i = 0, dim = 0; dim < NUM_DIMS;) {
+			double token = vector[i++];
+			if (token > 0.0) centroid[dim++] = token;
+			else repeat(-token, j) centroid[dim++] = 0.0;
 		}
 		
 		// print_difference(vectors, 0, random_index); // Debug
@@ -396,11 +543,12 @@ void kmeans(double** vectors, unsigned int num_vectors, unsigned int* labels, do
 	}
 	
 	// Main loop
+	double previous_average_cluster_size = 1.0;
 	int* cluster_counts = malloc((size_t)num_clusters * sizeof(int));
 	for (unsigned int iter = 0; iter < max_iter; iter++) {
 		bool changed = false;
 		
-		// Reset new centroids
+		// Reset new centroids.
 		for (unsigned int i = 0; i < num_clusters; i++) {
 			for (int dim = 0; dim < NUM_DIMS; dim++) {
 				new_centroids[i][dim] = 0.0;
@@ -408,29 +556,33 @@ void kmeans(double** vectors, unsigned int num_vectors, unsigned int* labels, do
 			cluster_counts[i] = 0;
 		}
 		
-		// Assign each point to the nearest centroid
+		// Assign each point to the nearest centroid.
 		for (unsigned int i = 0; i < num_vectors; i++) {
 			double* vector = vectors[i];
 			double min_dist = DBL_MAX;
 			unsigned int best_centroid_label = 0;
 			
+			// Find nearest centroid.
 			for (unsigned int j = 0; j < num_clusters; j++) {
-				double dist = difference(vector, centroids[j]);
+				double dist = sparse_dif_c(vector, centroids[j]);
 				if (dist < min_dist) {
 					min_dist = dist;
 					best_centroid_label = j;
 				}
 			}
 			
+			// Update label to new centroid, if necessary.
 			if (labels[i] != best_centroid_label) {
 				labels[i] = best_centroid_label;
 				changed = true;
 			}
 			
-			// Accumulate values for new centroid calculation
+			// Accumulate values for new centroid calculation.
 			double* best_centroid = new_centroids[best_centroid_label];
-			for (unsigned int dim = 0; dim < NUM_DIMS; dim++) {
-				best_centroid[dim] += vector[dim];
+			for (unsigned int i = 0, dim = 0; dim < NUM_DIMS;) {
+				const double val = vector[i++];
+				if (is_neg(val)) dim += (unsigned int)(-val);
+				else best_centroid[dim++] += val;
 			}
 			cluster_counts[best_centroid_label]++;
 		}
@@ -450,8 +602,20 @@ void kmeans(double** vectors, unsigned int num_vectors, unsigned int* labels, do
 		}
 		
 		// Print cluster size for debugging.
-		print_cluster_size(vectors, num_vectors, labels, centroids, num_clusters, iter);
+		Timer* timer = timer_new();
+		timer_benchmark(timer,
+			double average_cluster_size = print_cluster_size(vectors, num_vectors, labels, centroids, num_clusters, iter);
+		);
+		*debug_time += timer_get(timer);
+		timer_free(timer);
 		fflush(stdout);
+		
+		// Is there enough improvement?
+		double improvement = previous_average_cluster_size - average_cluster_size;
+		fprintf(kmeans_file, INDENT"Improvement: %.4lf\n", improvement);
+		fflush(kmeans_file);
+		if (improvement < KMEANS_IMPROVEMENT_THRESHOLD) break;
+		previous_average_cluster_size = average_cluster_size;
 	}
 	
 	// Free memory.
@@ -468,7 +632,7 @@ void kmeans(double** vectors, unsigned int num_vectors, unsigned int* labels, do
  *** 
  *** @param dataset_path Path to a comma-separated file containing the dataset strings.
  ***/
-void load_dataset(const char* dataset_path) {
+void load_dataset(const char* dataset_path, char** dataset, unsigned int dataset_size) {
 	FILE *file = fopen(dataset_path, "r");
 	if (!file) {
 		char error_buf[BUFSIZ];
@@ -495,13 +659,13 @@ void load_dataset(const char* dataset_path) {
         if (*buf == ',') size++;
         buf++;
     }
-	if (size != DATASET_SIZE) {
-		fprintf(stderr, "\nWarning: Expected dataset of size %d but got %ld.\n\n", DATASET_SIZE, size);
+	if (size != dataset_size) {
+		fprintf(stderr, "\nWarning: Expected dataset of size %u but got %ld.\n\n", dataset_size, size);
 	}
 	
 	size_t count = 0;
 	char* token = strtok(buffer, ",");
-	while (token && count < DATASET_SIZE) {
+	while (token && count < dataset_size) {
 		dataset[count++] = strdup(token);
 		token = strtok(NULL, ",");
 	}
@@ -538,13 +702,13 @@ bool verify_dupe(ArrayList* complete_dups, unsigned int d1, unsigned int d2) {
  *** 
  *** Complexity: `O(n^2 * 3d)`
  ***/
-ArrayList* find_complete_dups(double** vectors, unsigned int num_vectors) {
+ArrayList* find_complete_dups(double** vectors, unsigned int num_vectors, char** dataset) {
 	ArrayList* complete_dups = al_newc(512);
 	for (unsigned int i = 0; i < num_vectors; i++) {
 		const double* v1 = vectors[i];
 		for (unsigned int j = i + 1; j < num_vectors; j++) {
 			const double* v2 = vectors[j];
-			if (similarity(v1, v2) > THRESHOLD) {
+			if (sparse_similarity(v1, v2) > THRESHOLD) {
 				al_add(complete_dups, i);
 				al_add(complete_dups, j);
 			}
@@ -556,13 +720,12 @@ ArrayList* find_complete_dups(double** vectors, unsigned int num_vectors) {
 	al_trim_to_size(complete_dups);
 	
 	// Log duplocates found by the complete strategy.
-	size_t num_complete_dups = complete_dups->size;
-	fprintf(complete_file, "Duplocates found: x%ld/%d\n", num_complete_dups, num_vectors);
-	for (size_t i = 0; i < num_complete_dups;) {
-		unsigned int d1 = al_get(complete_dups, i++);
-		unsigned int d2 = al_get(complete_dups, i++);
-		fprintf(complete_file, "%s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
-	}
+	// fprintf(complete_file, "Duplocates found: x%ld/%u\n", complete_dups->size / 2, num_vectors);
+	// for (size_t i = 0; i < complete_dups->size;) {
+	// 	unsigned int d1 = al_get(complete_dups, i++);
+	// 	unsigned int d2 = al_get(complete_dups, i++);
+	// 	fprintf(complete_file, "%s (#%u) & %s (#%u)\n", dataset[d1], d1, dataset[d2], d2);
+	// }
 	
 	return complete_dups;
 }
@@ -587,7 +750,7 @@ ArrayList* find_sliding_dups(double** vectors, unsigned int num_vectors, unsigne
 		const unsigned int j_max = min(i + window_size, num_vectors);
 		for (unsigned int j = i + 1; j < j_max; j++) {
 			const double* v2 = vectors[j];
-			if (similarity(v1, v2) > THRESHOLD) {
+			if (sparse_similarity(v1, v2) > THRESHOLD) {
 				al_add(sliding_dups, i);
 				al_add(sliding_dups, j);
 			}
@@ -599,18 +762,18 @@ ArrayList* find_sliding_dups(double** vectors, unsigned int num_vectors, unsigne
 	al_trim_to_size(sliding_dups);
 	
 	// Log and verify duplocates found by the sliding strategy.
-	size_t num_sliding_dups = sliding_dups->size;
-	fprintf(sliding_file, "Duplocates found: x%ld/%d\n", num_sliding_dups, num_vectors);
-	for (size_t i = 0; i < num_sliding_dups;) {
-		unsigned int d1 = al_get(sliding_dups, i++);
-		unsigned int d2 = al_get(sliding_dups, i++);
-		fprintf(sliding_file, "%s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
+	// size_t num_sliding_dups = sliding_dups->size;
+	// fprintf(sliding_file, "Duplocates found: x%ld/%d\n", num_sliding_dups, num_vectors);
+	// for (size_t i = 0; i < num_sliding_dups;) {
+	// 	unsigned int d1 = al_get(sliding_dups, i++);
+	// 	unsigned int d2 = al_get(sliding_dups, i++);
+	// 	fprintf(sliding_file, "%s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
 		
-		if (!verify_dupe(complete_dups, d1, d2)) {
-			printf("sliding found false dupe: %s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
-		}
-	}
-	fprintf(sliding_file, "\n\n");
+	// 	if (!verify_dupe(complete_dups, d1, d2)) {
+	// 		printf("sliding found false dupe: %s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
+	// 	}
+	// }
+	// fprintf(sliding_file, "\n\n");
 	
 	return sliding_dups;
 }
@@ -652,11 +815,16 @@ ArrayList* find_kmeans_dups(double** vectors, unsigned int num_vectors, unsigned
 	double** centroids = malloc((size_t)num_clusters * sizeof(double*));
 	for (unsigned int i = 0; i < num_clusters; i++)
 		centroids[i] = malloc(NUM_DIMS * sizeof(double));
+	fprintf(kmeans_file, "\nMalloced...\n");
+	fflush(kmeans_file);
 	
 	// Execute kmeans clustering.
+	double debug_time = 0.0;
 	timer_benchmark(timer_clustering,
-		kmeans(vectors, num_vectors, labels, centroids, iterations, max_iter, num_clusters);
+		kmeans(vectors, num_vectors, labels, centroids, iterations, max_iter, num_clusters, &debug_time);
 	);
+	fprintf(kmeans_file, "Clustered...\n");
+	fflush(kmeans_file);
 	
 	// Find duplocates in clusters.
 	timer_benchmark(timer_scan,
@@ -667,13 +835,16 @@ ArrayList* find_kmeans_dups(double** vectors, unsigned int num_vectors, unsigned
 			for (unsigned int j = i + 1; j < num_vectors; j++) {
 				if (labels[j] != label) continue;
 				const double* v2 = vectors[j];
-				if (similarity(v1, v2) > THRESHOLD) {
+				if (sparse_similarity(v1, v2) > THRESHOLD) {
 					al_add(kmeans_dups, i);
 					al_add(kmeans_dups, j);
 				}
 			}
 		}
 	);
+	
+	fprintf(kmeans_file, "Checked!\n");
+	fflush(kmeans_file);
 	
 	// Lock results.
 	al_lock(kmeans_dups);
@@ -730,6 +901,7 @@ ArrayList* find_kmeans_dups(double** vectors, unsigned int num_vectors, unsigned
 	double total_time = timer_get(timer_total);
 	timer_print_cmp(timer_clustering, INDENT"Kmeans clustering", total_time);
 	timer_print_cmp(timer_scan, INDENT"Kmeans checking", total_time);
+	printf(INDENT"Kmeans debug time: %.4lfs.\n", debug_time);
 	
 	// Free memory.
 	free(labels);
@@ -744,30 +916,19 @@ ArrayList* find_kmeans_dups(double** vectors, unsigned int num_vectors, unsigned
 	return kmeans_dups;
 }
 
-ArrayList* test_complete_search(double** vectors, unsigned int num_vectors, Timer* timer) {
+ArrayList* test_complete_search(double** vectors, unsigned int num_vectors, Timer* timer, char** dataset) {
 	// Flush buffers to reduce flush overhead during benchmark.
-	printf("\nComplete search on %d records:\n", num_vectors);
+	printf("\nComplete search on %u records:\n", num_vectors);
 	check(fflush(stdout), "fflush(stdout)");
 	
-	// Complete search.
-	double complete_time = 0.0;
-	ArrayList* complete_dups = NULL;
-	for (unsigned int rep = 0; rep < num_repeats; rep++) {
-		// Free memory.
-		if (complete_dups != NULL) al_free(complete_dups);
-		
-		// Execute the complete search dupe detection.
-		timer_benchmark(timer,
-			complete_dups = find_complete_dups(vectors, num_vectors);
-		);
-		complete_time += timer_get(timer);
-	}
-	complete_time /= num_repeats;
-	timer->stored_duration = complete_time;
+	// Execute the complete search dupe detection.
+	timer_benchmark(timer,
+		ArrayList* complete_dups = find_complete_dups(vectors, num_vectors, dataset);
+	);
 	
 	// Print complete search summary.
 	printf(INDENT"Dups: %ld\n", complete_dups->size / 2);
-	printf(INDENT"Time: %.4lfs\n", complete_time);
+	printf(INDENT"Time: %.4lfs\n", timer_store(timer));
 	check(fflush(stdout), "fflush(stdout)");
 	
 	return complete_dups;
@@ -780,7 +941,7 @@ void test_sliding_search(double** vectors, unsigned int num_vectors, Timer* time
 		unsigned int window_size = window_sizes[i];
 		
 		// Flush buffers to reduce flush overhead during benchmark.
-		printf("\nSliding window (x%d):\n", window_size);
+		printf("\nSliding window (x%u):\n", window_size);
 		check(fflush(stdout), "fflush(stdout)");
 		
 		// Benchmarking execution time.
@@ -816,8 +977,8 @@ void test_kmeans_search(double** vectors, unsigned int num_vectors, unsigned int
 		unsigned int cluster_count = cluster_counts[i], iterations = 0;
 		
 		// Flush buffers to reduce flush overhead during benchmark.
-		fprintf(kmeans_file, "\n\n============================\n%d vectors, %d clusters\n", num_vectors, cluster_count);
-		printf("\nKmeans (num_clusters=%d):\n", cluster_count);
+		fprintf(kmeans_file, "\n\n============================\n%u vectors, %u clusters\n", num_vectors, cluster_count);
+		printf("\nKmeans (num_clusters=%u):\n", cluster_count);
 		check(fflush(stdout), "fflush(stdout)");
 		
 		// Benchmarking execution time.
@@ -839,7 +1000,7 @@ void test_kmeans_search(double** vectors, unsigned int num_vectors, unsigned int
 		const double time_percent = 100.0f * kmeans_time / timer->stored_duration;
 		const double percent_success_kmeans = 100.0 * (double)kmeans_dups->size / (2.0 * (double)complete_dups->size / 2);
 		printf(INDENT"Time: %.4lfs (%%%.2f)\n", kmeans_time, time_percent);
-		printf(INDENT"Iterations: %d/%d\n", iterations, max_iter);
+		printf(INDENT"Iterations: %u/%u\n", iterations, max_iter);
 		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", kmeans_dups->size / 2, complete_dups->size / 2, percent_success_kmeans);
 		check(fflush(stdout), "fflush(stdout)");
 		
@@ -848,8 +1009,116 @@ void test_kmeans_search(double** vectors, unsigned int num_vectors, unsigned int
 	}
 }
 
+#define MAX_COMPLETE_SEARCH 1000
+void test_lightning_search(double** vectors, unsigned int num_vectors, Timer* timer, ArrayList* complete_dups, char** dataset) {
+	printf("\nLightning Search:\n");
+	printf(INDENT"Data Size: %u\n", num_vectors);
+	
+	ArrayList* dups;
+	if (num_vectors <= MAX_COMPLETE_SEARCH) {
+		check(fflush(stdout), "fflush(stdout)");
+		timer_benchmark(timer,
+			dups = find_complete_dups(vectors, num_vectors, dataset);
+		);
+	} else {
+		unsigned int cluster_count = compute_k(num_vectors), iterations = 0;
+		printf(INDENT"Clusters: %u\n", cluster_count);
+		check(fflush(stdout), "fflush(stdout)");
+		
+		// Execute kmeans dupe detection.
+		timer_benchmark(timer,
+			dups = find_kmeans_dups(vectors, num_vectors, &iterations, max_iter, cluster_count, complete_dups);
+		);
+		printf(INDENT"Iterations: %u/%u\n", iterations, max_iter);
+	}
+	
+	// Early cleanup
+	const size_t num_dups = dups->size;
+	al_free(dups);
+
+	// Print summary.
+	const double time = timer_get(timer);
+	const double time_percent = 100.0f * time / timer->stored_duration;
+	const double percent_success = 100.0 * (double)num_dups / (2.0 * (double)complete_dups->size / 2);
+	printf(INDENT"Time: %.4lfs (%%%.2f)\n", time, time_percent);
+	printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", num_dups / 2, complete_dups->size / 2, percent_success);
+	check(fflush(stdout), "fflush(stdout)");
+}
+
+// Data random sample.
+// double** sample_vectors(double** vectors, unsigned int dataset_size) {
+//     // Create an array of indices
+//     unsigned int* indices = (unsigned int*)malloc(DATASET_SIZE * sizeof(unsigned int));
+//     for (unsigned int i = 0; i < DATASET_SIZE; i++) {
+//         indices[i] = i;
+//     }
+
+//     // Shuffle the indices array using Fisher-Yates shuffle
+//     for (unsigned int i = DATASET_SIZE - 1; i > 0; i--) {
+//         unsigned int j = (unsigned int)rand() % (i + 1u);
+//         unsigned int temp = indices[i];
+//         indices[i] = indices[j];
+//         indices[j] = temp;
+//     }
+
+//     // Select the first dataset_size indices as the sample
+// 	double** sample = (double**)malloc(dataset_size * sizeof(double*));
+//     for (unsigned int i = 0; i < dataset_size; i++) {
+//         sample[i] = vectors[indices[i]];
+//     }
+
+// 	// Clean up.
+//     free(indices);
+	
+// 	return sample;
+// }
+
+// void test(void) {
+// 	char* dataset[] = {"box", "boxes", "school"};
+// 	unsigned int dataset_size = 3u;
+// 	double** vectors = malloc(dataset_size * sizeof(double*));
+// 	check(build_vectors(vectors, dataset, dataset_size), "build_vectors");
+	
+// 	repeat(dataset_size, i) {
+// 		double* vector = vectors[i];
+// 		printf("%s:", dataset[i]);
+// 		for (unsigned int j = 0, idx = 0; idx < NUM_DIMS; j++) {
+// 			if (vector[j] >= 0.001) idx++;
+// 			else idx += (unsigned int)(-vector[j]);
+// 			printf(" %g,", vector[j]);
+// 		}
+// 		printf("\n");
+// 	}
+	
+// 	printf("\t\t");
+// 	repeat(NUM_DIMS, i) printf("% 4d,", i);
+// 	printf("\n");
+	
+// 	repeat(dataset_size, i) {
+// 		double* vector = vectors[i];
+// 		printf("%s:\t", dataset[i]);
+// 		for (unsigned int j = 0, idx = 0; idx < NUM_DIMS; j++) {
+// 			if (vector[j] >= 0.001) { printf(" % 3g,", vector[j]); idx++; }
+// 			else {
+// 				unsigned int num = (unsigned int)(-vector[j]);
+// 				idx += num;
+// 				repeat(num, k) printf("    ,");
+// 			}
+// 		}
+// 		printf("\n");
+// 	}
+	
+// 	for (unsigned int i = 0; i < dataset_size; i++) {
+// 		const double* v1 = vectors[i];
+// 		for (unsigned int j = i + 1; j < dataset_size; j++) {
+// 			const double* v2 = vectors[j];
+// 			printf("%s (#%u) & %s (#%u) => %lf\n", dataset[i], i, dataset[j], j, sparse_similarity(v1, v2));
+// 		}
+// 	}
+// }
+
 /*** Program entry point: runs three duplicate-detection strategies and reports results.
- ***
+ *** 
  *** Usage:
  *** 
  ***  - argv[1] -> complete_file_name
@@ -889,46 +1158,59 @@ int main(int argc, char* argv[]) {
 	setvbuf(kmeans_file, NULL, _IOFBF, (4 * 1000 * 1000));
 	printf("Begin!\n");
 	
+	// test();
+	// return 0;
+	
 	// Print basic settings info.
 	printf(
 		"\nSettings:\n"
-			INDENT"Dataset (x%d): %s\n"
-			INDENT"Dimensions: %d\n"
+			INDENT"Dimensions: %u\n"
 			INDENT"Similarity Threshold: %.4f\n",
-		DATASET_SIZE, DATASET_PATH,
 		NUM_DIMS,
 		THRESHOLD
 	);
 	check(fflush(stdout), "fflush(stdout)");
 	
-	// Load dataset and build vectors.
-	timer_benchmark(timer,
-		load_dataset(DATASET_PATH);
-		double** vectors = malloc(DATASET_SIZE * sizeof(double*));
-		check(build_vectors(vectors, dataset, DATASET_SIZE), "build_vectors");
-	);
-	timer_print(timer, "Loading");
-	
 	size_t num_dataset_sizes = sizeof(dataset_sizes) / sizeof(dataset_sizes[0]);
-	for (size_t i = 0; i < num_dataset_sizes; i++) {
+	repeat(num_dataset_sizes, i) {
 		unsigned int dataset_size = dataset_sizes[i];
+		
+		// Load dataset and build vectors.
+		char* dataset[dataset_size];
+		timer_benchmark(timer,
+			char path[BUFSIZ];
+			snprintf(path, sizeof(path), "datasets/surnames_%u.txt", dataset_size);
+			
+			load_dataset(path, dataset, dataset_size);
+			double** vectors = malloc(dataset_size * sizeof(double*));
+			check(build_vectors(vectors, dataset, dataset_size), "build_vectors");
+		);
+		
+		// Print
+		printf("\n\nDataset Loaded (x%u):\n", dataset_size);
+		timer_print(timer, INDENT"Loading");
 		
 		// Complete search.
 		ArrayList* complete_dups = (dataset_size <= 10000)
-			? test_complete_search(vectors, dataset_size, timer)
+			? test_complete_search(vectors, dataset_size, timer, dataset)
 			: al_new();
 
 		// Sliding search.
-		// test_sliding_search(vectors, NUM_VECTORS, timer, complete_dups);
+		// test_sliding_search(vectors, dataset_size, timer, complete_dups);
 		
 		// Kmeans search.
-		test_kmeans_search(vectors, dataset_size, cluster_counts + i, 6, timer, complete_dups);
+		// test_kmeans_search(vectors, dataset_size, timer, complete_dups);
 		
-		// Free Memory
+		// Lightning search.
+		test_lightning_search(vectors, dataset_size, timer, complete_dups, dataset);
+		
+		// Clean up.
+		for (unsigned int i = 0; i < dataset_size; i++) {
+			free(vectors[i]);
+			free(dataset[i]);
+		}
+		free(vectors);
 		al_free(complete_dups);
-		
-		// Flush buffers.
-		printf("\n\n\n\n");
 		check(fflush(stdout), "fflush(stdout)");
 	}
 	
@@ -946,11 +1228,6 @@ int main(int argc, char* argv[]) {
 	if (kmeans_file) fclose(kmeans_file);
 	
 	// Free memory.
-	for (int i = 0; i < DATASET_SIZE; i++) {
-		free(vectors[i]);
-		free(dataset[i]);
-	}
-	free(vectors);
 	timer_free(timer);
 	timer_free(timer_total);
 	

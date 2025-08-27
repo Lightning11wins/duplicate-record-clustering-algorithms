@@ -1,0 +1,45 @@
+Begin!
+
+Settings:
+	> Dimensions: 251
+	> Similarity Threshold: 0.7500
+
+
+Dataset Loaded (x5000):
+	> Loading time: 0.0050s.
+
+Complete search on 5000 records:
+	> Dups: 11611
+	> Time: 2.5516s
+
+Lightning Search:
+	> Data Size: 5000
+	> Clusters: 6
+	> Kmeans clustering time: 0.4373s (%47.54).
+	> Kmeans checking time: 0.4825s (%52.45).
+	> Kmeans debug time: 0.2199s.
+	> Iterations: 8/64
+	> Time: 0.9199s (%36.05)
+	> Dups: 10490/11611 (%90.35)
+
+
+Dataset Loaded (x10000):
+	> Loading time: 0.0084s.
+
+Complete search on 10000 records:
+	> Dups: 37919
+	> Time: 9.9873s
+
+Lightning Search:
+	> Data Size: 10000
+	> Clusters: 10
+	> Kmeans clustering time: 2.3738s (%63.48).
+	> Kmeans checking time: 1.3656s (%36.52).
+	> Kmeans debug time: 1.1938s.
+	> Iterations: 14/64
+	> Time: 3.7396s (%37.44)
+	> Dups: 33527/37919 (%88.42)
+
+Total time: 17.2131s.
+
+Done!

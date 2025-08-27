@@ -1,0 +1,389 @@
+
+Begin!
+
+Settings:
+	> Dataset (x1000000): datasets/surnames.txt
+	> Dimensions: 251
+	> Similarity Threshold: 0.7500
+Loading time: 1.7224s.
+
+Complete search on 100 records:
+	> Dups: 696
+	> Time: 0.0035s
+
+Kmeans (num_clusters=2):
+	> Kmeans clustering time: 0.0018s (%40.98).
+	> Kmeans checking time: 0.0026s (%58.92).
+	> Time: 0.0043s (%125.20)
+	> Iterations: 6/64
+	> Dups: 644/696 (%92.53)
+
+Kmeans (num_clusters=4):
+	> Kmeans clustering time: 0.0039s (%72.99).
+	> Kmeans checking time: 0.0014s (%26.99).
+	> Time: 0.0054s (%154.08)
+	> Iterations: 7/64
+	> Dups: 535/696 (%76.87)
+
+Kmeans (num_clusters=8):
+	> Kmeans clustering time: 0.0058s (%81.19).
+	> Kmeans checking time: 0.0013s (%18.80).
+	> Time: 0.0071s (%205.13)
+	> Iterations: 6/64
+	> Dups: 513/696 (%73.71)
+
+Kmeans (num_clusters=16):
+	> Kmeans clustering time: 0.0075s (%94.36).
+	> Kmeans checking time: 0.0004s (%5.63).
+	> Time: 0.0080s (%229.38)
+	> Iterations: 4/64
+	> Dups: 285/696 (%40.95)
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 0.0194s (%99.12).
+	> Kmeans checking time: 0.0002s (%0.88).
+	> Time: 0.0196s (%562.84)
+	> Iterations: 5/64
+	> Dups: 179/696 (%25.72)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 0.0487s (%99.85).
+	> Kmeans checking time: 0.0001s (%0.15).
+	> Time: 0.0488s (%1405.15)
+	> Iterations: 6/64
+	> Dups: 67/696 (%9.63)
+
+
+
+
+
+Complete search on 1000 records:
+	> Dups: 13730
+	> Time: 0.3357s
+
+Kmeans (num_clusters=4):
+	> Kmeans clustering time: 0.0653s (%29.98).
+	> Kmeans checking time: 0.1525s (%70.02).
+	> Time: 0.2179s (%64.89)
+	> Iterations: 12/64
+	> Dups: 12373/13730 (%90.12)
+
+Kmeans (num_clusters=8):
+	> Kmeans clustering time: 0.1130s (%61.23).
+	> Kmeans checking time: 0.0716s (%38.77).
+	> Time: 0.1846s (%54.99)
+	> Iterations: 11/64
+	> Dups: 11336/13730 (%82.56)
+
+Kmeans (num_clusters=16):
+	> Kmeans clustering time: 0.1628s (%73.75).
+	> Kmeans checking time: 0.0580s (%26.25).
+	> Time: 0.2208s (%65.76)
+	> Iterations: 8/64
+	> Dups: 11125/13730 (%81.03)
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 0.2821s (%91.75).
+	> Kmeans checking time: 0.0254s (%8.25).
+	> Time: 0.3075s (%91.58)
+	> Iterations: 7/64
+	> Dups: 7960/13730 (%57.98)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 0.5042s (%97.90).
+	> Kmeans checking time: 0.0108s (%2.10).
+	> Time: 0.5150s (%153.39)
+	> Iterations: 6/64
+	> Dups: 6038/13730 (%43.98)
+
+Kmeans (num_clusters=128):
+	> Kmeans clustering time: 0.7752s (%99.33).
+	> Kmeans checking time: 0.0052s (%0.67).
+	> Time: 0.7804s (%232.44)
+	> Iterations: 5/64
+	> Dups: 3882/13730 (%28.27)
+
+
+
+
+
+Complete search on 10000 records:
+	> Dups: 140720
+	> Time: 35.3771s
+
+Kmeans (num_clusters=8):
+	> Kmeans clustering time: 4.1294s (%29.49).
+	> Kmeans checking time: 9.8712s (%70.51).
+	> Time: 14.0006s (%39.58)
+	> Iterations: 37/64
+	> Dups: 122479/140720 (%87.04)
+
+Kmeans (num_clusters=16):
+	> Kmeans clustering time: 5.9079s (%59.79).
+	> Kmeans checking time: 3.9737s (%40.21).
+	> Time: 9.8816s (%27.93)
+	> Iterations: 25/64
+	> Dups: 115784/140720 (%82.28)
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 8.2459s (%81.80).
+	> Kmeans checking time: 1.8344s (%18.20).
+	> Time: 10.0804s (%28.49)
+	> Iterations: 18/64
+	> Dups: 117178/140720 (%83.27)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 17.6014s (%95.04).
+	> Kmeans checking time: 0.9185s (%4.96).
+	> Time: 18.5200s (%52.35)
+	> Iterations: 20/64
+	> Dups: 108773/140720 (%77.30)
+
+Kmeans (num_clusters=128):
+	> Kmeans clustering time: 32.5414s (%98.52).
+	> Kmeans checking time: 0.4894s (%1.48).
+	> Time: 33.0309s (%93.37)
+	> Iterations: 19/64
+	> Dups: 98239/140720 (%69.81)
+
+Kmeans (num_clusters=256):
+	> Kmeans clustering time: 65.1675s (%99.58).
+	> Kmeans checking time: 0.2760s (%0.42).
+	> Time: 65.4435s (%184.99)
+	> Iterations: 19/64
+	> Dups: 79237/140720 (%56.31)
+
+
+
+
+
+Kmeans (num_clusters=16):
+	> Kmeans clustering time: 72.0971s (%15.74).
+	> Kmeans checking time: 386.0361s (%84.26).
+	> Time: 458.1335s (%1295.00)
+	> Iterations: 32/64
+	> Dups: 4606521/0 (%inf)
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 290.6186s (%58.31).
+	> Kmeans checking time: 207.8023s (%41.69).
+	> Time: 498.4211s (%1408.88)
+	> Iterations: 64/64
+	> Dups: 4126821/0 (%inf)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 291.7738s (%71.88).
+	> Kmeans checking time: 114.1404s (%28.12).
+	> Time: 405.9144s (%1147.39)
+	> Iterations: 32/64
+	> Dups: 4035511/0 (%inf)
+
+Kmeans (num_clusters=128):
+	> Kmeans clustering time: 678.3670s (%93.02).
+	> Kmeans checking time: 50.9268s (%6.98).
+	> Time: 729.2940s (%2061.49)
+	> Iterations: 38/64
+	> Dups: 3647973/0 (%inf)
+
+Kmeans (num_clusters=256):
+	> Kmeans clustering time: 1044.3401s (%97.59).
+	> Kmeans checking time: 25.8433s (%2.41).
+	> Time: 1070.1837s (%3025.07)
+	> Iterations: 30/64
+	> Dups: 3203324/0 (%inf)
+
+Kmeans (num_clusters=512):
+	> Kmeans clustering time: 1550.5675s (%99.09).
+	> Kmeans checking time: 14.1874s (%0.91).
+	> Time: 1564.7551s (%4423.07)
+	> Iterations: 22/64
+	> Dups: 2750435/0 (%inf)
+
+
+
+
+
+Kmeans (num_clusters=32):
+	> Kmeans clustering time: 2888.4108s (%14.53).
+	> Kmeans checking time: 16987.7163s (%85.47).
+	> Time: 19876.1283s (%56183.58)
+	> Iterations: 64/64
+	> Dups: 50729043/0 (%inf)
+
+Kmeans (num_clusters=64):
+	> Kmeans clustering time: 5685.9953s (%39.74).
+	> Kmeans checking time: 8623.5061s (%60.26).
+	> Time: 14309.5025s (%40448.48)
+	> Iterations: 64/64
+	> Dups: 48805503/0 (%inf)
+
+Kmeans (num_clusters=128):
+	> Kmeans clustering time: 11778.2471s (%70.55).
+	> Kmeans checking time: 4917.3367s (%29.45).
+	> Time: 16695.5849s (%47193.18)
+	> Iterations: 64/64
+	> Dups: 45478312/0 (%inf)
+
+Kmeans (num_clusters=256):
+	> Kmeans clustering time: 22722.2366s (%89.63).
+	> Kmeans checking time: 2627.9634s (%10.37).
+	> Time: 25350.2012s (%71657.07)
+	> Iterations: 64/64
+	> Dups: 43656277/0 (%inf)
+
+Kmeans (num_clusters=512):
+...
+
+
+
+Sliding Window:
+
+Settings:
+	> Dataset (x1000000): datasets/surnames.txt
+	> Dimensions: 251
+	> Similarity Threshold: 0.7500
+	> Loading time: 1.9309s.
+
+Complete search on 100 records:
+	> Dups: 696
+	> Time: 0.0038s
+
+Sliding window (x3):
+	> Dups: 60/696 (%8.62)
+	> Time: 0.0002s (%4.46)
+
+Sliding window (x6):
+	> Dups: 111/696 (%15.95)
+	> Time: 0.0005s (%11.96)
+
+Sliding window (x16):
+	> Dups: 224/696 (%32.18)
+	> Time: 0.0012s (%32.04)
+
+Sliding window (x32):
+	> Dups: 364/696 (%52.30)
+	> Time: 0.0021s (%54.98)
+
+Sliding window (x64):
+	> Dups: 588/696 (%84.48)
+	> Time: 0.0033s (%87.37)
+
+Sliding window (x256):
+	> Dups: 696/696 (%100.00)
+	> Time: 0.0037s (%99.26)
+
+
+
+Complete search on 1000 records:
+	> Dups: 13730
+	> Time: 0.3590s
+
+Sliding window (x3):
+	> Dups: 603/13730 (%4.39)
+	> Time: 0.0018s (%0.50)
+
+Sliding window (x6):
+	> Dups: 1097/13730 (%7.99)
+	> Time: 0.0041s (%1.15)
+
+Sliding window (x16):
+	> Dups: 2041/13730 (%14.87)
+	> Time: 0.0119s (%3.31)
+
+Sliding window (x32):
+	> Dups: 2974/13730 (%21.66)
+	> Time: 0.0244s (%6.79)
+
+Sliding window (x64):
+	> Dups: 4228/13730 (%30.79)
+	> Time: 0.0460s (%12.81)
+
+Sliding window (x256):
+	> Dups: 7760/13730 (%56.52)
+	> Time: 0.1652s (%46.02)
+
+
+
+Complete search on 10,000 records:
+	> Dups: 140720
+	> Time: 37.6085s
+
+Sliding window (x3):
+	> Dups: 4524/140720 (%3.21)
+	> Time: 0.0164s (%0.04)
+
+Sliding window (x6):
+	> Dups: 7683/140720 (%5.46)
+	> Time: 0.0391s (%0.10)
+
+Sliding window (x16):
+	> Dups: 12868/140720 (%9.14)
+	> Time: 0.1126s (%0.30)
+
+Sliding window (x32):
+	> Dups: 17391/140720 (%12.36)
+	> Time: 0.2287s (%0.61)
+
+Sliding window (x64):
+	> Dups: 22584/140720 (%16.05)
+	> Time: 0.4588s (%1.22)
+
+Sliding window (x256):
+	> Dups: 38173/140720 (%27.13)
+	> Time: 1.8299s (%4.87)
+
+
+
+100,000 records:
+
+Sliding window (x3):
+	> Dups: 65461/0 (%inf)
+	> Time: 0.1635s (%0.43)
+
+Sliding window (x6):
+	> Dups: 121181/0 (%inf)
+	> Time: 0.3955s (%1.05)
+
+Sliding window (x16):
+	> Dups: 229829/0 (%inf)
+	> Time: 1.1454s (%3.05)
+
+Sliding window (x32):
+	> Dups: 335541/0 (%inf)
+	> Time: 2.3438s (%6.23)
+
+Sliding window (x64):
+	> Dups: 471617/0 (%inf)
+	> Time: 4.7241s (%12.56)
+
+Sliding window (x256):
+	> Dups: 852159/0 (%inf)
+	> Time: 18.8784s (%50.20)
+
+
+
+1,000,000 records:
+
+Sliding window (x3):
+	> Dups: 500005/0 (%inf)
+	> Time: 2.1426s (%5.70)
+
+Sliding window (x6):
+	> Dups: 895230/0 (%inf)
+	> Time: 3.9934s (%10.62)
+
+Sliding window (x16):
+	> Dups: 1634777/0 (%inf)
+	> Time: 11.4851s (%30.54)
+
+Sliding window (x32):
+	> Dups: 2331654/0 (%inf)
+	> Time: 23.5015s (%62.49)
+
+Sliding window (x64):
+	> Dups: 3200815/0 (%inf)
+	> Time: 45.6243s (%121.31)
+
+Sliding window (x256):
+	> Dups: 5566902/0 (%inf)
+	> Time: 190.4145s (%506.31)

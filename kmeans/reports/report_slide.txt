@@ -1,0 +1,153 @@
+Begin!
+
+Settings:
+	> Dataset (x1000000): datasets/surnames.txt
+	> Dimensions: 251
+	> Similarity Threshold: 0.7500
+Loading time: 1.8713s.
+
+Complete search on 100 records:
+	> Dups: 696
+	> Time: 0.0038s
+
+Sliding window (x3):
+	> Dups: 60/696 (%8.62)
+	> Time: 0.0002s (%4.23)
+
+Sliding window (x6):
+	> Dups: 111/696 (%15.95)
+	> Time: 0.0004s (%10.30)
+
+Sliding window (x16):
+	> Dups: 224/696 (%32.18)
+	> Time: 0.0011s (%28.64)
+
+Sliding window (x32):
+	> Dups: 364/696 (%52.30)
+	> Time: 0.0020s (%53.30)
+
+Sliding window (x64):
+	> Dups: 588/696 (%84.48)
+	> Time: 0.0033s (%84.67)
+
+Sliding window (x256):
+	> Dups: 696/696 (%100.00)
+	> Time: 0.0039s (%101.39)
+
+
+
+Complete search on 1000 records:
+	> Dups: 13730
+	> Time: 0.3587s
+
+Sliding window (x3):
+	> Dups: 603/13730 (%4.39)
+	> Time: 0.0018s (%0.50)
+
+Sliding window (x6):
+	> Dups: 1097/13730 (%7.99)
+	> Time: 0.0038s (%1.06)
+
+Sliding window (x16):
+	> Dups: 2041/13730 (%14.87)
+	> Time: 0.0106s (%2.96)
+
+Sliding window (x32):
+	> Dups: 2974/13730 (%21.66)
+	> Time: 0.0225s (%6.26)
+
+Sliding window (x64):
+	> Dups: 4228/13730 (%30.79)
+	> Time: 0.0447s (%12.47)
+
+Sliding window (x256):
+	> Dups: 7760/13730 (%56.52)
+	> Time: 0.1599s (%44.56)
+
+
+
+Complete search on 10000 records:
+	> Dups: 140720
+	> Time: 38.8988s
+
+Sliding window (x3):
+	> Dups: 4524/140720 (%3.21)
+	> Time: 0.0168s (%0.04)
+
+Sliding window (x6):
+	> Dups: 7683/140720 (%5.46)
+	> Time: 0.0396s (%0.10)
+
+Sliding window (x16):
+	> Dups: 12868/140720 (%9.14)
+	> Time: 0.1120s (%0.29)
+
+Sliding window (x32):
+	> Dups: 17391/140720 (%12.36)
+	> Time: 0.2300s (%0.59)
+
+Sliding window (x64):
+	> Dups: 22584/140720 (%16.05)
+	> Time: 0.4579s (%1.18)
+
+Sliding window (x256):
+	> Dups: 38173/140720 (%27.13)
+	> Time: 1.8166s (%4.67)
+
+
+
+Sliding window (x3):
+	> Dups: 65461/0 (%inf)
+	> Time: 0.1704s (%0.44)
+
+Sliding window (x6):
+	> Dups: 121181/0 (%inf)
+	> Time: 0.4062s (%1.04)
+
+Sliding window (x16):
+	> Dups: 229829/0 (%inf)
+	> Time: 1.1605s (%2.98)
+
+Sliding window (x32):
+	> Dups: 335541/0 (%inf)
+	> Time: 2.3389s (%6.01)
+
+Sliding window (x64):
+	> Dups: 471617/0 (%inf)
+	> Time: 4.7481s (%12.21)
+
+Sliding window (x256):
+	> Dups: 852159/0 (%inf)
+	> Time: 18.5881s (%47.79)
+
+
+
+Sliding window (x3):
+	> Dups: 500005/0 (%inf)
+	> Time: 1.7145s (%4.41)
+
+Sliding window (x6):
+	> Dups: 895230/0 (%inf)
+	> Time: 4.1418s (%10.65)
+
+Sliding window (x16):
+	> Dups: 1634777/0 (%inf)
+	> Time: 11.6215s (%29.88)
+
+Sliding window (x32):
+	> Dups: 2331654/0 (%inf)
+	> Time: 23.1272s (%59.45)
+
+Sliding window (x64):
+	> Dups: 3200815/0 (%inf)
+	> Time: 47.2490s (%121.47)
+
+Sliding window (x256):
+	> Dups: 5566902/0 (%inf)
+	> Time: 182.5703s (%469.35)
+
+
+
+Total time: 341.8989s.
+
+Done!
