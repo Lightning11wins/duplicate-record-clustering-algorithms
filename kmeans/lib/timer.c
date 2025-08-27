@@ -39,9 +39,9 @@ double timer_get(Timer* timer) {
 	return (timer) ? timer->end - timer->start : NAN;
 }
 
-void timer_store(Timer* timer) {
-	if (!timer) return;
-	timer->stored_duration = timer_get(timer);
+double timer_store(Timer* timer) {
+	if (!timer) return NAN;
+	return timer->stored_duration = timer_get(timer);
 }
 
 void timer_print(const Timer* timer, const char* name) {
