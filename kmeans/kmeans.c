@@ -15,14 +15,14 @@
 #define INDENT "\t> "
 #define NUM_DIMS 251
 #define SEED 1621963727
-#define THRESHOLD 0.75
-#define KMEANS_IMPROVEMENT_THRESHOLD 0.0010
+#define DUPE_THRESHOLD 0.75
+#define KMEANS_IMPROVEMENT_THRESHOLD 0.0002
 
 // Test Parameters
 unsigned int window_sizes[] = {3, 6, 16, 32, 64, 256};
 unsigned int cluster_counts[] = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
-unsigned int dataset_sizes[] = {100000, 1000000};
-unsigned int max_iter = 256;
+unsigned int dataset_sizes[] = {50000};
+unsigned int max_iter = 64;
 
 FILE* complete_file = NULL;
 FILE* sliding_file = NULL;
@@ -58,7 +58,7 @@ void fprint_mem(FILE* out) {
 	long resident_bytes = resident * page_size;
 
 	fprintf(out, INDENT"Memory used (RSS): %ld bytes (%.2f MB)\n", resident_bytes, (double)resident_bytes / (1024.0 * 1024.0));
-	fprintf(out, INDENT"Share %ldb, Text %ldb, Lib %ldb, Data %ldb, dt %ldb\n", share, text, lib, data, dt);
+	fprintf(out, INDENT"Share %ldb, Text %ldb, Lib %ldb, Data %ldb\n", share, text, lib, data);
 }
 
 void fprint_vector(FILE* out, const int* vector) {
@@ -127,11 +127,6 @@ void* mallocs(const size_t size) {
 		while (1) exit(1);
 	}
 	return memset(ptr, 0, size);
-}
-
-unsigned int assert_pos(int num) {
-	if (num < 0) fprintf(stderr, "FAIL - %d is not positive!\n", num);
-	return (unsigned)num;
 }
 
 // Keep an eye on this function.
@@ -218,21 +213,15 @@ int* build_vector(char* str) {
 /*** Compute the value for `k` (number of clusters), given a dataset of with
  *** a size of `n`.
  *** 
- *** The following table shows data sizes vs. our aproximate guess at the
- *** best cluster size vs. the actual cluster size picked by the function.
+ *** The following table shows data sizes vs.selected cluster size. In testing,
+ *** these numbers tended to givea good balance of accuracy and dulocates detected.
  *** 
  *** ```csv
- *** Data Size, Guess, Actual
- *** 10k,       16,    10
- *** 100k,      32,    29
- *** 1M,        64,    57
+ *** Data Size, Actual
+ *** 10k,       12
+ *** 100k,      33
+ *** 1M,        67
  *** ```
- *** 
- *** Notice that this function consistantly undershoots the guessed optimal
- *** values. This is intentional. Fewer clusters, while slightly slower, gives
- *** better detection accuracy. Thus, this function is designed to air on the
- *** lower side, especially for smaller data sizes where the loss in speed is
- *** likely to be neglegable.
  *** 
  *** This function is not intended for datasets smaller than (`n < ~2000`).
  *** These should be handled using complete search.
@@ -243,7 +232,7 @@ int* build_vector(char* str) {
  *** @returns k, the number of clusters to use.
  ***/
 unsigned int compute_k(unsigned int n) {
-	return max(2u, (unsigned int)pow(log(n) / log(36), 3.1) - 8u);
+	return max(2u, (unsigned int)pow(log(n) / log(36), 3.2) - 8u);
 }
 
 double magnitude_sparse(const int* vector) {
@@ -252,10 +241,10 @@ double magnitude_sparse(const int* vector) {
 		const int val = vector[i++];
 		
 		// Negative val represents -val 0s in the array, so skip that many values. 
-		if (val < 0) dim += assert_pos(-val);
+		if (val < 0) dim += (unsigned)(-val);
 		
 		// We have a value, so square it and add it to the magnitude.
-		else {magnitude += assert_pos(val * val); dim++;}
+		else {magnitude += (unsigned)(val * val); dim++;}
 	}
 	return sqrt((double)magnitude);
 }
@@ -269,12 +258,12 @@ double magnitude_dense(const double* vector) {
 void parse_token(const int token, unsigned int* remaining, unsigned int* value) {
 	if (token < 0) {
 		// This run contains -token zeros.
-		*remaining = assert_pos(-token);
+		*remaining = (unsigned)(-token);
 		*value = 0u;
 	} else {
 		// This run contains one value.
 		*remaining = 1;
-		*value = assert_pos(token);
+		*value = (unsigned)(token);
 	}
 }
 
@@ -333,10 +322,10 @@ double sparse_similarity_c(const int* v1, const double* c2) {
 		const int val = v1[i++];
 		
 		// Negative val represents -val 0s in the array, so skip that many values. 
-		if (val < 0) dim += assert_pos(-val);
+		if (val < 0) dim += (unsigned)(-val);
 		
 		// We have a value, so square it and add it to the magnitude.
-		else dot_product += (double)assert_pos(val) * c2[dim++];
+		else dot_product += (double)val * c2[dim++];
 	}
 	
 	// Return the difference score.
@@ -538,8 +527,8 @@ void kmeans(int** vectors, unsigned int num_vectors, unsigned int* labels, doubl
 			double* best_centroid = new_centroids[best_centroid_label];
 			for (unsigned int i = 0u, dim = 0u; dim < NUM_DIMS;) {
 				const int val = vector[i++];
-				if (val < 0) dim += assert_pos(-val);
-				else best_centroid[dim++] += (double)assert_pos(val);
+				if (val < 0) dim += (unsigned)(-val);
+				else best_centroid[dim++] += (double)val;
 			}
 			cluster_counts[best_centroid_label]++;
 		}
@@ -639,7 +628,7 @@ void load_dataset(const char* dataset_path, char** dataset, const unsigned int d
 /*** Scans the entire dataset for duplicates by pairwise similarity.
  *** 
  *** This is the "complete" strategy: every pair `(i, j)` is compared and
- *** pairs with `(similarity > THRESHOLD)` are appended to the returned list.
+ *** pairs with `(similarity > DUPE_THRESHOLD)` are appended to the returned list.
  *** The function also logs found duplicates to the `complete_file`.
  *** 
  *** @param vectors Array of precomputed frequency vectors for all dataset strings.
@@ -654,7 +643,7 @@ ArrayList* find_complete_dups(int** vectors, unsigned int num_vectors) {
 		const int* v1 = vectors[i];
 		for (unsigned int j = i + 1; j < num_vectors; j++) {
 			const int* v2 = vectors[j];
-			if (sparse_similarity(v1, v2) > THRESHOLD) {
+			if (sparse_similarity(v1, v2) > DUPE_THRESHOLD) {
 				al_add(complete_dups, i);
 				al_add(complete_dups, j);
 			}
@@ -696,7 +685,7 @@ ArrayList* find_sliding_dups(int** vectors, unsigned int num_vectors, const unsi
 		const unsigned int j_max = min(i + window_size, num_vectors);
 		for (unsigned int j = i + 1; j < j_max; j++) {
 			const int* v2 = vectors[j];
-			if (sparse_similarity(v1, v2) > THRESHOLD) {
+			if (sparse_similarity(v1, v2) > DUPE_THRESHOLD) {
 				al_add(sliding_dups, i);
 				al_add(sliding_dups, j);
 			}
@@ -733,7 +722,7 @@ ArrayList* find_sliding_dups(int** vectors, unsigned int num_vectors, const unsi
  ***  - Run kmeans(...) to assign labels.
  *** 
  ***  - For each cluster, compare points inside the cluster and record pairs
- ***    with `(similarity > THRESHOLD)`.
+ ***    with `(similarity > DUPE_THRESHOLD)`.
  *** 
  ***  - Log duplicates and cluster contents to `kmeans_file`, validate found
  ***    pairs against `complete_dups` to detect mistakes.
@@ -782,7 +771,7 @@ ArrayList* find_kmeans_dups(int** vectors, unsigned int num_vectors, unsigned in
 			for (unsigned int j = i + 1; j < num_vectors; j++) {
 				if (labels[j] != label) continue;
 				const int* v2 = vectors[j];
-				if (sparse_similarity(v1, v2) > THRESHOLD) {
+				if (sparse_similarity(v1, v2) > DUPE_THRESHOLD) {
 					al_add(kmeans_dups, i);
 					al_add(kmeans_dups, j);
 				}
@@ -940,7 +929,7 @@ void test_kmeans_search(int** vectors, unsigned int num_vectors, unsigned int* c
 
 // 100,000 records should take almost 10 minutes on LightSys hardware.
 // Any more than 10 minutes, and we go to kmeans for faster execution time.
-#define MAX_COMPLETE_SEARCH 100 * 1000
+#define MAX_COMPLETE_SEARCH 0 // 100 * 1000
 void test_lightning_search(int** vectors, unsigned int num_vectors, Timer* timer, ArrayList* complete_dups) {
 	printf("\nLightning Search:\n");
 	printf(INDENT"Data Size: %u\n", num_vectors);
@@ -1024,9 +1013,9 @@ int main(int argc, char* argv[]) {
 	printf(
 		"\nSettings:\n"
 			INDENT"Dimensions: %u\n"
-			INDENT"Similarity Threshold: %.4f\n",
+			INDENT"Dupe Threshold: %.4f\n",
 		NUM_DIMS,
-		THRESHOLD
+		DUPE_THRESHOLD
 	);
 	fprint_mem(stdout);
 	check(fflush(stdout), "fflush(stdout)");
