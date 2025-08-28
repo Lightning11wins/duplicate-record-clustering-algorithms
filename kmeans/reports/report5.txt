@@ -43,3 +43,17 @@ Lightning Search:
 Total time: 17.2131s.
 
 Done!
+
+Other run:
+
+Lightning Search:
+	> Data Size: 50000
+	> Clusters: 26
+	> Memory used (RSS): 13291520 bytes (12.68 MB)
+	> Share 464b, Text 6b, Lib 0b, Data 2835b
+	> Kmeans clustering time: 8.4145s (%50.07).
+	> Kmeans checking time: 8.3905s (%49.93).
+	> Kmeans debug time: 4.1896s.
+	> Iterations: 11/64
+	> Time: 16.8054s (%11.87)
+	> Dups: 481272/587149 (%81.97)
