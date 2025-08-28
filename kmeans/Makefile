@@ -36,6 +36,7 @@ build: $(BUILD_DIR) $(BIN_FAST)
 clean:
 	rm -rf $(BUILD_DIR) $(OUT_DIR)
 	rm -f $(BIN_FAST) $(BIN_DEBUG) $(PRE) $(ASM) $(OUT) $(OUT_COMPLETE) $(OUT_SLIDING) $(OUT_KMEANS) .gdb_history a.out
+	git gc
 
 run: $(BUILD_DIR) $(OUT_DIR) $(BIN_FAST)
 	./$(BIN_FAST) $(CMD_ARGS) > $(OUT)
