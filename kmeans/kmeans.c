@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "lib/arraylist.h"
 #include "lib/timer.h"
@@ -30,7 +31,7 @@
 // Test Parameters
 unsigned int window_sizes[] = {3, 6, 16, 32, 64, 256};
 unsigned int cluster_counts[] = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
-unsigned int dataset_sizes[] = {5000, 10000};//, 50000, 100000, 1000000};
+unsigned int dataset_sizes[] = {1000000};//{5000, 10000};//, 50000, 100000, 1000000};
 unsigned int max_iter = 64;
 unsigned int num_repeats = 1; // Repeat algorithms to reduce randomness.
 
@@ -47,17 +48,37 @@ FILE* kmeans_file = NULL;
  *** s: The number of records in the average cluster.
  ***/
 
+// 1M: 185.66 MB
+void fprint_mem(FILE* out) {
+	FILE *fp = fopen("/proc/self/statm", "r");
+	if (!fp) { perror("fopen"); return; }
+
+	long size, resident, share, text, lib, data, dt;
+	if (fscanf(fp, "%ld %ld %ld %ld %ld %ld %ld",
+			&size, &resident, &share, &text, &lib, &data, &dt) != 7) {
+		fprintf(stderr, "Failed to read memory info\n");
+		fclose(fp);
+		return;
+	}
+	fclose(fp);
+
+	long page_size = sysconf(_SC_PAGESIZE); // in bytes
+	long resident_bytes = resident * page_size;
+
+	fprintf(out, INDENT"Memory used (RSS): %ld bytes (%.2f MB)\n", resident_bytes, (double)resident_bytes / (1024.0 * 1024.0));
+	fprintf(out, INDENT"Share %ldb, Text %ldb, Lib %ldb, Data %ldb, dt %ldb\n", share, text, lib, data, dt);
+}
  
-void fprint_vector(FILE* file, const double* vector) {
+void fprint_vector(FILE* out, const double* vector) {
 	for (unsigned int j = 0, idx = 0; idx < NUM_DIMS; j++) {
-		if (vector[j] >= 0.001) { fprintf(file, " % 3g,", vector[j]); idx++; }
+		if (vector[j] >= 0.001) { fprintf(out, " % 3g,", vector[j]); idx++; }
 		else {
 			unsigned int num = (unsigned int)(-vector[j]);
 			idx += num;
-			repeat(num, k) fprintf(file, "    ,");
+			repeat(num, k) fprintf(out, "    ,");
 		}
 	}
-	fprintf(file, "\n");
+	fprintf(out, "\n");
 }
 
 // ====================================
@@ -1169,6 +1190,7 @@ int main(int argc, char* argv[]) {
 		NUM_DIMS,
 		THRESHOLD
 	);
+	fprint_mem(stdout);
 	check(fflush(stdout), "fflush(stdout)");
 	
 	size_t num_dataset_sizes = sizeof(dataset_sizes) / sizeof(dataset_sizes[0]);
@@ -1189,6 +1211,8 @@ int main(int argc, char* argv[]) {
 		// Print
 		printf("\n\nDataset Loaded (x%u):\n", dataset_size);
 		timer_print(timer, INDENT"Loading");
+		fprint_mem(stdout);
+		check(fflush(stdout), "fflush(stdout)");
 		
 		// Complete search.
 		ArrayList* complete_dups = (dataset_size <= 10000)
