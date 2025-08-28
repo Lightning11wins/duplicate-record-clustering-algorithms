@@ -246,8 +246,6 @@ unsigned int compute_k(unsigned int n) {
 	return max(2u, (unsigned int)pow(log(n) / log(36), 3.1) - 8u);
 }
 
-#define is_neg(val) (val < -0.001)
-
 double magnitude_sparse(const int* vector) {
 	unsigned int magnitude = 0;
 	for (unsigned int i = 0u, dim = 0u; dim < NUM_DIMS;) {
@@ -579,6 +577,9 @@ void kmeans(int** vectors, unsigned int num_vectors, unsigned int* labels, doubl
 		if (improvement < KMEANS_IMPROVEMENT_THRESHOLD) break;
 		previous_average_cluster_size = average_cluster_size;
 	}
+	
+	// kmeans memory usage.
+	fprint_mem(stdout);
 	
 	// Free memory.
 	repeat (num_clusters, i) {
