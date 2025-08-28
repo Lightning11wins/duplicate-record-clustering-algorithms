@@ -22,7 +22,7 @@
 unsigned int window_sizes[] = {3, 6, 16, 32, 64, 256};
 unsigned int cluster_counts[] = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
 unsigned int dataset_sizes[] = {100000, 1000000};
-unsigned int max_iter = 64;
+unsigned int max_iter = 256;
 
 FILE* complete_file = NULL;
 FILE* sliding_file = NULL;
