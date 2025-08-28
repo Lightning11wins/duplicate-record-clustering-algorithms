@@ -2,7 +2,7 @@ CC = gcc
 VISFLAGS = -I/usr/include/cairo -lgsl -lgslcblas -lcairo 
 CFLAGS_ALL = -Wall -Wextra -Wfloat-equal -Wundef -Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 -Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code -Wformat=2 -lm
 CFLAGS_FAST = $(CFLAGS_ALL) -O3
-CFLAGS_DEBUG = $(CFLAGS_ALL) -g -O0
+CFLAGS_DEBUG = $(CFLAGS_ALL) -g -rdynamic -O0
 UFLAGS = -Wshadow
 
 NAME = kmeans
@@ -23,7 +23,7 @@ OUT_SLIDING = $(OUT_DIR)/sliding.txt
 OUT_KMEANS = $(OUT_DIR)/kmeans.css
 CMD_ARGS = $(OUT_COMPLETE) $(OUT_SLIDING) $(OUT_KMEANS)
 
-.PHONY: all rerun rebuild build clean run debug valgrind pre preprocess asm
+.PHONY: all rerun rebuild build clean run debug gdb valgrind pre preprocess asm
 
 all: build
 
@@ -40,7 +40,12 @@ clean:
 run: $(BUILD_DIR) $(OUT_DIR) $(BIN_FAST)
 	./$(BIN_FAST) $(CMD_ARGS) > $(OUT)
 
-debug: $(BUILD_DIR) $(OUT_DIR) $(BIN_DEBUG)
+run_debug: $(BUILD_DIR) $(OUT_DIR) $(BIN_DEBUG)
+	./$(BIN_DEBUG) $(CMD_ARGS) > $(OUT)
+
+debug: gdb
+
+gdb: $(BUILD_DIR) $(OUT_DIR) $(BIN_DEBUG)
 	gdb --args ./$(BIN_DEBUG) $(CMD_ARGS)
 
 valgrind: $(BUILD_DIR) $(OUT_DIR) $(BIN_DEBUG)
