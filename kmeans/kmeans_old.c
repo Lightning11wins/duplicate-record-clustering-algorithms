@@ -1,13 +1,20 @@
 #include <ctype.h>
+#include <execinfo.h>
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <signal.h>
 
 #include "lib/arraylist.h"
 #include "lib/timer.h"
 #include "lib/utils.h"
 
+#define INDENT "\t> "
 #define NUM_DIMS 251
 #define SEED 1621963727
 #define DUPE_THRESHOLD 0.75
@@ -34,6 +41,27 @@ FILE* kmeans_file = NULL;
  
 // ====================================
 // Helper functions
+ 
+// 1M: 185.66 MB
+void fprint_mem(FILE* out) {
+	FILE *fp = fopen("/proc/self/statm", "r");
+	if (!fp) { perror("fopen"); return; }
+
+	long size, resident, share, text, lib, data, dt;
+	if (fscanf(fp, "%ld %ld %ld %ld %ld %ld %ld",
+			&size, &resident, &share, &text, &lib, &data, &dt) != 7) {
+		fprintf(stderr, "Failed to read memory info\n");
+		fclose(fp);
+		return;
+	}
+	fclose(fp);
+
+	long page_size = sysconf(_SC_PAGESIZE); // in bytes
+	long resident_bytes = resident * page_size;
+
+	fprintf(out, INDENT"Memory used (RSS): %ld bytes (%.2f MB)\n", resident_bytes, (double)resident_bytes / (1024.0 * 1024.0));
+	fprintf(out, INDENT"Share %ldb, Text %ldb, Lib %ldb, Data %ldb\n", share, text, lib, data);
+}
 
 void fprint_vector(FILE* out, const int* vector) {
 	for (unsigned int j = 0, idx = 0; idx < NUM_DIMS; j++) {
@@ -48,6 +76,92 @@ void fprint_vector(FILE* out, const int* vector) {
 
 void fprint_centroid(FILE* out, const double* vector) {
 	repeat (NUM_DIMS, i) fprintf(out, " % 3g,", vector[i]);
+}
+
+// Stacktrace that lies to you. Idk why.
+void fprint_stacktrace(void) {
+	// Define an array to hold the return addresses.
+	void *callstack[64];
+	int frames = backtrace(callstack, 64);
+	char** symbol_list = backtrace_symbols(callstack, frames);
+	if (symbol_list == NULL) { return perror("backtrace_symbols failed"); }
+
+	// Print the backtrace.
+	fprintf(stderr, "Stacktrace (%d):\n", frames);
+	repeat (frames, i) {
+		char* symbol = symbol_list[i];
+		
+		// Attempt to get print line number.
+		unsigned int line_number = 0;
+		if (!strncmp(symbol, "./bin/kmeans_debug.(", 20u)) goto fail;
+		char* start = strchr(symbol, '+');
+		if (start == NULL) goto fail;
+		if (sscanf(++start, "%x", &line_number) != 1) goto fail;
+		char fname[BUFSIZ];
+		snprintf(memset(fname, 0, sizeof(fname)), max(sizeof(fname), (unsigned)((unsigned long)start - (unsigned long)symbol - 20u)), "%s", symbol + 20);
+		fprintf(stderr, "./kmeans.c#%s:%u\n", fname, line_number);
+		continue;
+		
+		fail:
+		fprintf(stderr, "%s\n", symbol);
+	}
+	free(symbol_list);
+}
+
+// Function for failing on error.
+void fail(const char* function_name) {
+	// Create the most descriptive error message we can.
+	char error_buf[BUFSIZ];
+	snprintf(error_buf, sizeof(error_buf), "kmeans.c: Fail - %s", function_name);
+	perror(error_buf);
+	
+	// Throw segfault for easier debugging.
+	fprintf(stderr, "Program will now segfault.\n");
+	raise(SIGSEGV);
+}
+
+/*** Helper function for compact error handling on library & system function calls.
+ *** Any non-zero value is treated as an error, exiting the program.
+ ***
+ *** @param result The result of the function we're checking.
+ *** @param function_name The name of the function being checked (for debugging).
+ *** @returns result
+ ***/
+int check(int result, const char* function_name) {
+	if (result != 0) fail(function_name);
+	return result;
+}
+
+/*** Helper function for compact error handling on library & system function calls.
+ *** Any null value is treated as an error, exiting the program.
+ ***
+ *** @param result The result of the function we're checking.
+ *** @param function_name The name of the function being checked (for debugging).
+ *** @returns result
+ ***/
+void* check_ptr(void* result, const char* function_name) {
+	if (result == NULL) fail(function_name);
+	return result;
+}
+
+/*** Safe malloc with error handling.
+ *** 
+ *** @param size The size of memory to malloc.
+ *** @returns Clean, allocated memory.
+ ***/
+void* mallocs(const size_t size) {
+	void* ptr = malloc(size);
+	if (ptr == NULL) {
+		// Create the most descriptive error message we can.
+		char error_buf[BUFSIZ];
+		snprintf(error_buf, sizeof(error_buf), "kmeans.c: Fail - malloc(%lu bytes)", size);
+		perror(error_buf);
+		
+		// Throw segfault for easier debugging.
+		fprintf(stderr, "Program will now segfault.\n");
+		raise(SIGSEGV);
+	}
+	return memset(ptr, 0, size);
 }
 
 // Keep an eye on this function.
@@ -222,9 +336,19 @@ double sparse_similarity(const int* v1, const int* v2) {
 	if (dot_product == 0) return 0.0;
 	
 	// Return the difference score.
-	return (double)dot_product / (magnitude_sparse(v1) * magnitude_sparse(v2));
+	double total_magnitude = magnitude_sparse(v1) * magnitude_sparse(v2);
+	double similarity = (double)dot_product / total_magnitude;
+	if (similarity < 0.0 || 1.000000001 < similarity) {
+		FILE* out = stdout;
+		fprintf(out, "Strange similarity: %g\n", similarity);
+		fprintf(out, "v1:\t"); fprint_vector(out, v1); fprintf(out, "\n");
+		fprintf(out, "v2:\t"); fprint_vector(out, v2); fprintf(out, "\n");
+		fprintf(out, "\n");
+		fflush(out);
+	}
+	return similarity;
 }
-#define sparse_dif(v1, v2) (1.0 - sparse_similarity(v1, v2))
+// #define sparse_dif(v1, v2) (1.0 - sparse_similarity(v1, v2))
 
 double sparse_similarity_c(const int* v1, const double* c2) {
 	// Calculate dot product
@@ -240,45 +364,178 @@ double sparse_similarity_c(const int* v1, const double* c2) {
 	}
 	
 	// Return the difference score.
-	return dot_product / (magnitude_sparse(v1) * magnitude_dense(c2));
+	double total_magnitude = magnitude_sparse(v1) * magnitude_dense(c2);
+	double similarity = dot_product / total_magnitude;
+	if (similarity < 0.0 || 1.000000001 < similarity) {
+		FILE* out = stdout;
+		fprintf(out, "Strange similarity_c: %g\n", similarity);
+		fprintf(out, "v1:\t"); fprint_vector(out, v1); fprintf(out, "\n");
+		fprintf(out, "c2:\t"); fprint_centroid(out, c2); fprintf(out, "\n");
+		fprintf(out, "\n");
+		fflush(out);
+	}
+	return similarity;
 }
 #define sparse_dif_c(v1, c2) (1.0 - sparse_similarity_c(v1, c2))
 
 /*** Calculate the average size of all clusters in a set of vectors.
- *** 
+ ***
  *** @param vectors The vectors of the dataset.
  *** @param num_vectors The number of vectors in the dataset.
  *** @param labels The clusters to which vectors are assigned.
  *** @param centroids The locations of the centroids.
- *** @param num_clusters The number of centroids (k).
  *** @returns The average cluster size.
  ***/
-double get_cluster_size(int** vectors, unsigned int num_vectors, unsigned int* labels, double** centroids, unsigned int num_clusters) {
+double print_cluster_size(int** vectors, unsigned int num_vectors, unsigned int* labels, double** centroids, unsigned int num_clusters, unsigned int iteration) {
 	double cluster_sums[num_clusters];
-	unsigned int cluster_counts[num_clusters];
+	double noncluster_sums[num_clusters];
+	unsigned int cluster_sizes[num_clusters];
 	memset(cluster_sums, 0, sizeof(cluster_sums));
-	memset(cluster_counts, 0, sizeof(cluster_counts));
+	memset(noncluster_sums, 0, sizeof(noncluster_sums));
+	memset(cluster_sizes, 0, sizeof(cluster_sizes));
 	
 	// Sum the difference from each vector to its cluster centroid.
 	repeat (num_vectors, i) {
 		unsigned int label = labels[i];
-		cluster_sums[label] += sparse_dif_c(vectors[i], centroids[label]);
-		cluster_counts[label]++;
+		int* vector = vectors[i];
+		cluster_sums[label] += sparse_dif_c(vector, centroids[label]);
+		cluster_sizes[label]++;
+		
+		for (unsigned int j = 0; j < num_clusters; j++) {
+			if (j == label) continue;
+			noncluster_sums[j] += sparse_dif_c(vector, centroids[j]);
+		}
 	}
 	
-	// Add up the average cluster size.
-	double cluster_total = 0.0;
-	unsigned int num_valid_clusters = 0;
+	// Calculate the average difference per cluster and then the overall average.
+	// fprintf(kmeans_file, "Cluster Sizes:\n");
+	double cluster_total = 0.0, noncluster_total = 0.0;
+	double max_cluster_size = 0.0, min_cluster_size = 1.0;
+	unsigned int max_cluster_label = 0, min_cluster_label = 0, num_valid_clusters = 0;
 	repeat (num_clusters, label) {
-		unsigned int cluster_count = cluster_counts[label];
+		unsigned int cluster_count = cluster_sizes[label];
+		unsigned int noncluster_count = num_vectors - cluster_count;
 		if (cluster_count == 0) continue;
 		
-		cluster_total += cluster_sums[label] / cluster_count;
+		double cluster_size = cluster_sums[label] / cluster_count;
+		double noncluster_size = noncluster_sums[label] / noncluster_count;
+		cluster_total += cluster_size;
+		noncluster_total += noncluster_size;
 		num_valid_clusters++;
+		
+		if (cluster_size > max_cluster_size) {
+			max_cluster_size = cluster_size;
+			max_cluster_label = label;
+		}
+		if (cluster_size < min_cluster_size) {
+			min_cluster_size = cluster_size;
+			min_cluster_label = label;
+		}
+		
+		// fprintf(kmeans_file,
+		// 	"> Cluster #%d (x%d): %.4lf (vs. %.4lf).\n",
+		// 	label, cluster_size, cluster_size, noncluster_size
+		// ); // Debug
 	}
 	
-	// Return average sizes.
-	return cluster_total / num_valid_clusters;
+	// Verify that there are valid clusters.
+	if (num_valid_clusters == 0) {
+		printf("kmeans #%u: No valid clusters!\n", iteration);
+		return 0.0;
+	}
+	
+	// Calculate average sizes.
+	double average_cluster_size = cluster_total / num_valid_clusters;
+	double average_noncluster_size = noncluster_total / num_valid_clusters;
+	
+	// Print data
+	fprintf(kmeans_file,
+		"\nkmeans #%u:\n"
+			INDENT"Average cluster: %.4lf\n"
+			INDENT"Average noncluster: %.4lf\n"
+			INDENT"Largest cluster: #%d @ %.4lf\n"
+			INDENT"Smallest cluster: #%d @ %.4lf\n",
+		iteration,
+		average_cluster_size,
+		average_noncluster_size,
+		max_cluster_label, max_cluster_size,
+		min_cluster_label, min_cluster_size
+	);
+	
+	return average_cluster_size;
+}
+
+void select_centroids(int** vectors, unsigned int num_vectors, double** centroids, unsigned int num_clusters) {
+	// Setup.
+	srand(SEED);
+	double* weight = (double*)mallocs(num_vectors * sizeof(double));
+	
+	// Prevent picking the same vector twice.
+	bool* is_chosen = (bool*)mallocs(num_vectors * sizeof(bool));
+	repeat (num_vectors, i) is_chosen[i] = false;
+
+	// Pick first centroid uniformly at random.
+	unsigned int first_index = (unsigned int)rand() % num_vectors;
+	is_chosen[first_index] = true;
+	{
+		double* centroid = centroids[0];
+		memset(centroid, 0, NUM_DIMS * sizeof(double));
+		const int *vector = vectors[first_index];
+		for (unsigned int i = 0u, dim = 0u; dim < NUM_DIMS;) {
+			int token = vector[i++];
+			if (token < 0) { dim += (unsigned)(-token); }
+			else { centroid[dim++] = (double)token; }
+		}
+	}
+
+	// Initialize weight to the first centroid.
+	repeat (num_vectors, i) {
+		if (is_chosen[i]) { weight[i] = 0.0; continue; }
+		double dist = sparse_dif_c(vectors[i], centroids[0]);
+		// Use squared distance as weight (kmeans++ typical choice).
+		weight[i] = dist * dist;
+	}
+
+	// Choose remaining centroids.
+	for (unsigned int c = 1; c < num_clusters; c++) {
+		double total_weight = 0.0;
+		repeat (num_vectors, i) total_weight += weight[i];
+
+		unsigned int next_idx = 0;
+		if (total_weight <= 0.0) {
+			fprintf(stderr, "Too many clusters: k=%u, datasize=%u, total_weight=%.4lf\n",num_clusters, num_vectors, total_weight);
+			exit(42);
+		}
+		
+		// Select with probability proportional to weight (weights).
+		double r = ((double)rand() / (double)RAND_MAX) * total_weight;
+		double acc = 0.0;
+		repeat (num_vectors, i) {
+			acc += weight[i];
+			if (r <= acc) { next_idx = i; break; }
+		}
+
+		// Mark is_chosen and copy sparse vector into dense centroid.
+		is_chosen[next_idx] = true;
+		double* centroid = centroids[c];
+		memset(centroid, 0, NUM_DIMS * sizeof(double));
+		const int* vector = vectors[next_idx];
+		for (unsigned int i = 0u, dim = 0u; dim < NUM_DIMS;) {
+			const int token = vector[i++];
+			if (token < 0) { dim += (unsigned)(-token); }
+			else { centroid[dim++] = (double)token; }
+		}
+
+		// Update weight: for each point, distance = min(old, dist(point, new_centroid))^2
+		repeat (num_vectors, i) {
+			if (is_chosen[i]) { weight[i] = 0.0; continue; }
+			const double dist = sparse_dif_c(vectors[i], centroid);
+			weight[i] = min(weight[i], dist * dist);
+		}
+	}
+
+	free(weight);
+	free(is_chosen);
 }
 
 /*** Executes the k-means clustering algorithm. Selects NUM_CLUSTERS random
@@ -316,7 +573,7 @@ double get_cluster_size(int** vectors, unsigned int num_vectors, unsigned int* l
  *** 
  *** - `O(nk + nd)`
  ***/
-void kmeans(int** vectors, unsigned int num_vectors, unsigned int* labels, double** centroids, unsigned int* iterations, unsigned int max_iter, unsigned int num_clusters) {
+void kmeans(int** vectors, unsigned int num_vectors, unsigned int* labels, double** centroids, unsigned int* iterations, unsigned int max_iter, unsigned int num_clusters, double* debug_time) {
 	// Select random vectors to use as the initial centroids.
 	srand(SEED);
 	repeat (num_clusters, i) {
@@ -402,7 +659,13 @@ void kmeans(int** vectors, unsigned int num_vectors, unsigned int* labels, doubl
 		}
 		
 		// Print cluster size for debugging.
-		const double average_cluster_size = get_cluster_size(vectors, num_vectors, labels, centroids, num_clusters);
+		Timer* timer = timer_new();
+		timer_benchmark(timer,
+			const double average_cluster_size = print_cluster_size(vectors, num_vectors, labels, centroids, num_clusters, iter);
+		);
+		*debug_time += timer_get(timer);
+		timer_free(timer);
+		fflush(stdout);
 		
 		// Is there enough improvement?
 		const double improvement = previous_average_cluster_size - average_cluster_size;
@@ -433,8 +696,9 @@ void load_dataset(const char* dataset_path, char** dataset, const unsigned int d
 	FILE *file = fopen(dataset_path, "r");
 	if (!file) {
 		char error_buf[BUFSIZ];
-		snprintf(error_buf, sizeof(error_buf), "Could not open \"%s\"", dataset_path);
-		fail(error_buf);
+		snprintf(error_buf, sizeof(error_buf), "Failed to open file: %s", dataset_path);
+		perror(error_buf);
+		exit(EXIT_FAILURE);
 	}
 	
 	char* buffer = NULL;
@@ -444,8 +708,9 @@ void load_dataset(const char* dataset_path, char** dataset, const unsigned int d
 	
 	if (error) {
 		char error_buf[BUFSIZ];
-		snprintf(error_buf, sizeof(error_buf), "Could not read \"%s\"", dataset_path);
-		fail(error_buf);
+		snprintf(error_buf, sizeof(error_buf), "Failed to read file: %s", dataset_path);
+		perror(error_buf);
+		exit(EXIT_FAILURE);
 	}
 	
 	// Verify dataset size.
@@ -497,6 +762,14 @@ ArrayList* find_complete_dups(int** vectors, unsigned int num_vectors) {
 	al_lock(complete_dups);
 	al_trim_to_size(complete_dups);
 	
+	// Log duplocates found by the complete strategy.
+	// fprintf(complete_file, "Duplocates found: x%ld/%u\n", complete_dups->size / 2, num_vectors);
+	// for (size_t i = 0; i < complete_dups->size;) {
+	// 	unsigned int d1 = al_get(complete_dups, i++);
+	// 	unsigned int d2 = al_get(complete_dups, i++);
+	// 	fprintf(complete_file, "%s (#%u) & %s (#%u)\n", dataset[d1], d1, dataset[d2], d2);
+	// }
+	
 	return complete_dups;
 }
 
@@ -530,6 +803,20 @@ ArrayList* find_sliding_dups(int** vectors, unsigned int num_vectors, const unsi
 	// Lock results.
 	al_lock(sliding_dups);
 	al_trim_to_size(sliding_dups);
+	
+	// Log and verify duplocates found by the sliding strategy.
+	// size_t num_sliding_dups = sliding_dups->size;
+	// fprintf(sliding_file, "Duplocates found: x%ld/%d\n", num_sliding_dups, num_vectors);
+	// for (size_t i = 0; i < num_sliding_dups;) {
+	// 	unsigned int d1 = al_get(sliding_dups, i++);
+	// 	unsigned int d2 = al_get(sliding_dups, i++);
+	// 	fprintf(sliding_file, "%s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
+		
+	// 	if (!verify_dupe(complete_dups, d1, d2)) {
+	// 		printf("sliding found false dupe: %s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
+	// 	}
+	// }
+	// fprintf(sliding_file, "\n\n");
 	
 	return sliding_dups;
 }
@@ -578,7 +865,7 @@ ArrayList* find_kmeans_dups(int** vectors, unsigned int num_vectors, unsigned in
 	// Execute kmeans clustering.
 	double debug_time = 0.0;
 	timer_benchmark(timer_clustering,
-		kmeans(vectors, num_vectors, labels, centroids, iterations, max_iter, num_clusters);
+		kmeans(vectors, num_vectors, labels, centroids, iterations, max_iter, num_clusters, &debug_time);
 	);
 	fprintf(kmeans_file, "Clustered...\n");
 	fflush(kmeans_file);
@@ -606,6 +893,52 @@ ArrayList* find_kmeans_dups(int** vectors, unsigned int num_vectors, unsigned in
 	// Lock results.
 	al_lock(kmeans_dups);
 	al_trim_to_size(kmeans_dups);
+	
+	// Log duplocates found by the kmeans strategy.
+	// fprintf(kmeans_file, "Duplocates found:\n");
+	// size_t num_kmeans_dups = kmeans_dups->size;
+	// for (size_t i = 0; i < num_kmeans_dups;) {
+	// 	unsigned int d1 = al_get(kmeans_dups, i++);
+	// 	unsigned int d2 = al_get(kmeans_dups, i++);
+	// 	fprintf(kmeans_file, "%s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
+		
+	// 	if (!verify_dupe(complete_dups, d1, d2)) {
+	// 		printf("kmeans found false dupe: %s (#%d) & %s (#%d)\n", dataset[d1], d1, dataset[d2], d2);
+	// 	}
+	// }
+	
+	// Print kmeans clusters.
+	// fprintf(kmeans_file, "\nPoints By Cluster Assignment:\n");
+	// for (int cluster = 0; cluster < num_clusters; cluster++) {
+	// 	fprintf(kmeans_file, "Cluster %d: ", cluster);
+	// 	for (unsigned int i = 0u; i < NUM_VECTORS; i++) {
+	// 		if (labels[i] == cluster) {
+	// 			fprintf(kmeans_file, "%s, ", dataset[i]);
+	// 		}
+	// 	}
+	// 	fprintf(kmeans_file, "\n");
+	// }
+	
+	// Print cluster centroids. "my code is self-documenting"
+	// size_t cur = 0;
+	// char buf[num_clusters * (16 + NUM_DIMS * 6)];
+	// cur += (size_t)snprintf(memset(buf, 0, sizeof(buf)), sizeof(buf) - cur, "\nFinal Centroids:\n");
+	// for (int j = 0; j < num_clusters; j++) {
+	// 	cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "Cluster %d: (", j);
+	// 	for (int dim = 0; dim < NUM_DIMS; dim++) {
+	// 		double val = centroids[j][dim];
+	// 		if (val > 0) {
+	// 			if (val >= 0.0001) cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "%.4lf", val);
+	// 			else cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, "%.4lfe-9", val * 1000 * 1000 * 1000);
+	// 		}
+	// 		cur += (size_t)snprintf(buf + cur, sizeof(buf) - cur, ",");
+	// 	}
+	// 	#pragma GCC diagnostic push
+	// 	#pragma GCC diagnostic ignored "-Wsequence-point"
+	// 	cur += (size_t)snprintf(buf + --cur, sizeof(buf) - cur, ")\n");
+	// 	#pragma GCC diagnostic pop
+	// }
+	// fprintf(kmeans_file, "%s", buf); // Flush
 	
 	// Print benchmarks.
 	timer_stop(timer_total);
@@ -740,62 +1073,15 @@ void test_lightning_search(int** vectors, unsigned int num_vectors, Timer* timer
 	check(fflush(stdout), "fflush(stdout)");
 }
 
-double cmp_sim(const char* str1, const char* str2) {
-	size_t len = 2, sz = 32;
-	char strs[len][sz];
-	snprintf(memset(strs[0], 0, sz), sz, "%s", str1);
-	snprintf(memset(strs[1], 0, sz), sz, "%s", str2);
-	
-	int** vectors = (int**)mallocs(len * sizeof(int*));
-	repeat (len, i) vectors[i] = build_vector(strs[i]);
-	double dif = sparse_similarity(vectors[0], vectors[1]);
-	// printf("%s =? %s: %lf\n", strs[0], strs[1], dif);
-	free(vectors);
-	return dif;
-}
-
-void test_sims() {
-	unsigned int num_records = 4;
-	static char* data[][6] = {
-        {"John", "JHAN", "Smith", "SM0XMT", "JohnSmith", "1284 Lecross Street 58214"},
-        {"Jain", "JHAN", "Schmid", "XMTSMT", "JainDoe", "3614 Feron Place 62841"},
-        {"Bart", "PRT", "Smith", "SM0XMT", "ImOnTopOfTheWorldYeah", "1284 Lecross Street 58214"},
-        {"John", "JHAN", "Smith", "SM0XMT", "JohnSmtih", "1283 Lekroce Streat 58124"},
-    };
-	char*** dataset = (char***)data;
-	
-	repeat (num_records, i) repeat (i, j) {
-		double fname  = cmp_sim(data[i][0], data[j][0]);
-		double fnamem = cmp_sim(data[i][1], data[j][1]);
-		double lname  = cmp_sim(data[i][2], data[j][2]);
-		double lnamem = cmp_sim(data[i][3], data[j][3]);
-		double email  = cmp_sim(data[i][4], data[j][4]);
-		double addr   = cmp_sim(data[i][5], data[j][5]);
-		
-		double fname_ag = max(fname, fnamem * 0.9);
-		double lname_ag = max(lname, lnamem * 0.9);
-		
-		#define s(n) n * n
-		double ave = (fname_ag + lname_ag + email + addr) / 4.0;
-		double smt = (fname_ag * lname_ag) * 0.6 + email * 0.2 + addr * 0.2;
-		
-		printf(
-			"%s %s =? %s %s -> %lf %lf\n",
-			data[j][0], data[j][2], data[i][0], data[i][2],
-			ave, smt
-		);
-		printf(
-			INDENT"%lf (%lf), %lf (%lf), %lf, %lf\n",
-			fname, fnamem, lname, lnamem, email, addr
-		);
-	}
-}
-
 /*** Program entry point: runs various tests and reports results.
  *** 
  *** Usage:
  *** 
- ***  - argv[1] -> kmeans_file_name
+ ***  - argv[1] -> complete_file_name
+ *** 
+ ***  - argv[2] -> sliding_file_name
+ *** 
+ ***  - argv[3] -> kmeans_file_name
  ***
  *** The program:
  *** 
@@ -812,22 +1098,24 @@ void test_sims() {
  *** @returns `0` on success, `1` on incorrect invocation.
  ***/
 int main(int argc, char* argv[]) {
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <kmeans_file_name>\n", argv[0]);
+	if (argc != 4) {
+		fprintf(stderr, "Usage: %s <complete_file_name> <sliding_file_name> <kmeans_file_name>\n", argv[0]);
 		return 1;
 	}
-	kmeans_file = fopen(argv[1], "w");
+	complete_file = fopen(argv[1], "w");
+	sliding_file = fopen(argv[2], "w");
+	kmeans_file = fopen(argv[3], "w");
 	Timer* timer = timer_new();
 	Timer* timer_total = timer_new();
 	timer_start(timer_total);
-	
-	test_sims();
-	goto main_end;
 	
 	// Set buffers to only flush manually for more accurate performance evaluation.
 	setvbuf(stdout, NULL, _IOFBF, (2 * 1000 * 1000));
 	setvbuf(kmeans_file, NULL, _IOFBF, (4 * 1000 * 1000));
 	printf("Begin!\n");
+	
+	// test();
+	// return 0;
 	
 	// Print basic settings info.
 	printf(
@@ -885,8 +1173,6 @@ int main(int argc, char* argv[]) {
 		check(fflush(stdout), "fflush(stdout)");
 	}
 	
-	main_end:
-	
 	// Print the total execution time.
 	timer_stop(timer_total);
 	timer_print(timer_total, "\nTotal");
@@ -896,6 +1182,8 @@ int main(int argc, char* argv[]) {
 	check(fflush(stdout), "fflush(stdout)");
 	
 	// Close files.
+	if (complete_file) fclose(complete_file);
+	if (sliding_file) fclose(sliding_file);
 	if (kmeans_file) fclose(kmeans_file);
 	
 	// Free memory.

@@ -1,6 +1,5 @@
 #ifndef __H_ARRAYLIST
 #define __H_ARRAYLIST
-#include <stdbool.h>
 
 // Constants
 #define AL_DEFAULT_CAPACITY (size_t)16

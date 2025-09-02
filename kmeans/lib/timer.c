@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+
 #include "timer.h"
 
 double monotonic_seconds(void) {
