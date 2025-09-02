@@ -10,7 +10,7 @@ BUILD_DIR = bin
 LIB_DIR = lib
 OUT_DIR = out
 DATA_DIR = datasets
-LIBS = arraylist timer
+LIBS = arraylist timer utils
 LIBOS = $(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(LIBS)))
 BIN_DEBUG = $(BUILD_DIR)/$(NAME)_debug.o
 BIN_FAST = $(BUILD_DIR)/$(NAME)_fast.o
@@ -21,7 +21,7 @@ OUT = $(OUT_DIR)/std.txt
 OUT_COMPLETE = $(OUT_DIR)/complete.txt
 OUT_SLIDING = $(OUT_DIR)/sliding.txt
 OUT_KMEANS = $(OUT_DIR)/kmeans.css
-CMD_ARGS = $(OUT_COMPLETE) $(OUT_SLIDING) $(OUT_KMEANS)
+CMD_ARGS = $(OUT_KMEANS)
 
 .PHONY: all rerun rebuild build clean run debug gdb valgrind pre preprocess asm
 
