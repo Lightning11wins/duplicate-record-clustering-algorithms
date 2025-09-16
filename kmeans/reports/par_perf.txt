@@ -1,0 +1,65 @@
+Begin!
+
+Settings:
+	> Dimensions: 251
+	> Dupe Threshold: 0.7500
+	> Memory used (RSS): 1204224 bytes (1.15 MB)
+	> Share 270b, Text 7b, Lib 0b, Data 87b
+
+
+Dataset Loaded (x1000):
+	> Loading time: 0.0084s.
+	> Memory used (RSS): 1204224 bytes (1.15 MB)
+	> Share 270b, Text 7b, Lib 0b, Data 120b
+
+Complete search (in parallel) on 1000 records:
+	> Detected: 7 cores, using 7 threads... Done!
+	> Dups: 55
+	> Time: 0.0206s
+
+Complete search on 1000 records:
+	> Dups: 55
+	> Time: 0.0720s
+
+Sorting...
+Success!
+
+
+Dataset Loaded (x10000):
+	> Loading time: 0.0095s.
+	> Memory used (RSS): 3620864 bytes (3.45 MB)
+	> Share 505b, Text 7b, Lib 0b, Data 8810b
+
+Complete search (in parallel) on 10000 records:
+	> Detected: 7 cores, using 7 threads... Done!
+	> Dups: 4589
+	> Time: 1.8858s
+
+Complete search on 10000 records:
+	> Dups: 4589
+	> Time: 6.6849s
+
+Sorting...
+Success!
+
+
+Dataset Loaded (x100000):
+	> Loading time: 0.1554s.
+	> Memory used (RSS): 17321984 bytes (16.52 MB)
+	> Share 505b, Text 7b, Lib 0b, Data 12144b
+
+Complete search (in parallel) on 100000 records:
+	> Detected: 7 cores, using 7 threads... Done!
+	> Dups: 434647
+	> Time: 186.3582s
+
+Complete search on 100000 records:
+	> Dups: 434647
+	> Time: 659.0022s
+
+Sorting...
+Success!
+
+Total time: 854.2581s.
+
+Done!
