@@ -1,0 +1,21 @@
+Begin!
+
+Settings:
+	> Dimensions: 251
+	> Dupe Threshold: 0.7500
+	> Memory used (RSS): 1355776 bytes (1.29 MB)
+	> Share 309b, Text 6b, Lib 0b, Data 82b
+
+
+Dataset Loaded (x50000):
+	> Loading time: 0.0437s.
+	> Memory used (RSS): 8638464 bytes (8.24 MB)
+	> Share 469b, Text 6b, Lib 0b, Data 1694b
+
+Complete search on 50000 records:
+	> Dups: 109259
+	> Time: 169.2624s
+
+Total time: 169.3123s.
+
+Done!

@@ -1,6 +1,6 @@
 CC = gcc
-VISFLAGS = -I/usr/include/cairo -lgsl -lgslcblas -lcairo 
-CFLAGS_ALL = -Wall -Wextra -Wfloat-equal -Wundef -Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 -Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code -Wformat=2 -lm
+VISFLAGS = -I/usr/include/cairo -lgsl -lgslcblas -lcairo
+CFLAGS_ALL = -Wall -Wextra -Wfloat-equal -Wundef -Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 -Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code -Wformat=2 -lpthread -lm
 CFLAGS_FAST = $(CFLAGS_ALL) -O3
 CFLAGS_DEBUG = $(CFLAGS_ALL) -g -rdynamic -O0
 UFLAGS = -Wshadow
