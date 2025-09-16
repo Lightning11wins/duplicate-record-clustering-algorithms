@@ -20,7 +20,7 @@
 // Test Parameters
 unsigned int window_sizes[] = {3, 6, 16, 32, 64, 256};
 unsigned int cluster_counts[] = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
-unsigned int dataset_sizes[] = {1000, 10000, 100000};
+unsigned int dataset_sizes[] = {1000, 10000};//, 100000};
 unsigned int max_iter = 64;
 // #define PATH_FORMAT "datasets/dataset_updated.txt"
 #define PATH_FORMAT "datasets/surnames_%u.txt"
@@ -543,7 +543,7 @@ char** global_dataset;
  ***/
 ArrayList* find_complete_dups(int** vectors, unsigned int num_vectors) {
 	ArrayList* complete_dups = al_newc(num_vectors * 2u);
-	repeat (num_vectors, i) {
+	for (unsigned int i = 0u; i < num_vectors; i++) {
 		const int* v1 = vectors[i];
 		for (unsigned int j = i + 1; j < num_vectors; j++) {
 			const int* v2 = vectors[j];
@@ -562,101 +562,110 @@ ArrayList* find_complete_dups(int** vectors, unsigned int num_vectors) {
 }
 
 typedef struct {
-	unsigned int thread_id;
-	unsigned int start_i; // inclusive
-	unsigned int end_i;   // exclusive
 	int** vectors;
+	unsigned int i;
 	unsigned int num_vectors;
-	ArrayList* complete_dups;
+	unsigned int num_threads;
+	ArrayList* dups;
+	pthread_mutex_t* work_mutex;
 	pthread_mutex_t* list_mutex;
-} WorkerArg;
+} WorkStruct;
 
 static void* complete_search_worker(void* argp) {
-	// Extract variables.
-	WorkerArg* arg = (WorkerArg*)argp;
-	int** vectors = arg->vectors;
-	const unsigned int num_vectors = arg->num_vectors;
-	const unsigned int start_i = arg->start_i;
-	const unsigned int end_i = arg->end_i;
-	ArrayList* complete_dups = arg->complete_dups;
-	pthread_mutex_t* list_mutex = arg->list_mutex;
+	// Extract globals.
+	WorkStruct* work = (WorkStruct*)argp;
+	int** vectors = work->vectors;
+	const unsigned int num_vectors = work->num_vectors;
+	const unsigned int num_threads = work->num_threads;
+	ArrayList* dups = work->dups;
+	pthread_mutex_t* work_mutex = work->work_mutex;
+	pthread_mutex_t* list_mutex = work->list_mutex;
 	
-	for (unsigned int i = start_i; i < end_i; i++) {
-		const int* v1 = vectors[i];
-		for (unsigned int j = i + 1; j < num_vectors; j++) {
-			const int* v2 = vectors[j];
-			const double sim = sparse_similarity(v1, v2);
-			if (sim > DUPE_THRESHOLD) {
-				Dup* dup = (Dup*)mallocs(sizeof(Dup));
-				dup->i = i;
-				dup->j = j;
-				
-				pthread_mutex_lock(list_mutex);
-				al_add(complete_dups, dup);
-				// if (kmeans_file) {
-				// 	fprintf(kmeans_file, "%s,%s,%lf\n",
-				// 		global_dataset[i], global_dataset[j], sim);
-				// }
-				pthread_mutex_unlock(list_mutex);
+	// Work loop.
+	while (true) {
+		// Get work.
+		pthread_mutex_lock(work_mutex);
+		const unsigned int remaining_work = num_vectors - work->i;
+		if (remaining_work == 0) {
+			pthread_mutex_unlock(work_mutex);
+			break;
+		}
+		const unsigned int my_work = max(remaining_work / (num_threads * 4u), min(256u, remaining_work));
+		const unsigned int start_i = work->i;
+		const unsigned int end_i = start_i + my_work;
+		work->i = end_i;
+		pthread_mutex_unlock(work_mutex);
+		
+		// Do work.
+		for (unsigned int i = start_i; i < end_i; i++) {
+			const int* v1 = vectors[i];
+			for (unsigned int j = i + 1; j < num_vectors; j++) {
+				const int* v2 = vectors[j];
+				const double sim = sparse_similarity(v1, v2);
+				if (sim > DUPE_THRESHOLD) {
+					Dup* dup = (Dup*)mallocs(sizeof(Dup));
+					dup->i = i;
+					dup->j = j;
+					
+					pthread_mutex_lock(list_mutex);
+					al_add(dups, dup);
+					// if (kmeans_file) {
+					// 	fprintf(kmeans_file, "%s,%s,%lf\n",
+					// 		global_dataset[i], global_dataset[j], sim);
+					// }
+					pthread_mutex_unlock(list_mutex);
+				}
 			}
 		}
 	}
+	
 	return NULL;
 }
 
 ArrayList* find_complete_dups_par(int** vectors, unsigned int num_vectors) {
-	/* Create result list with same initial capacity as original code. */
-	ArrayList* complete_dups = al_newc((size_t)num_vectors * 2u);
-
-	/* Determine number of threads = number of CPU cores, at least 1, but not
-		more than num_vectors (no point in creating more threads than work). */
-	long ncores = sysconf(_SC_NPROCESSORS_ONLN);
-	if (ncores < 1) ncores = 1;
-	unsigned int nthreads = (unsigned int)ncores;
-	if (nthreads > num_vectors) nthreads = num_vectors;
-	if (nthreads < 1) nthreads = 1;
-	printf(INDENT"Detected: %ld cores, using %d threads... ", ncores, nthreads);
-
-	pthread_t* threads = mallocs(sizeof(pthread_t) * nthreads);
-	WorkerArg* args = mallocs(sizeof(WorkerArg) * nthreads);
-	pthread_mutex_t list_mutex;
+	// Detect available cores to determine how many threads to use.
+	long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+	if (num_cores < 1) num_cores = 1;
+	unsigned int num_threads = (unsigned int)num_cores;
+	if (num_threads > num_vectors) num_threads = num_vectors;
+	if (num_threads < 1) num_threads = 1;
+	printf(INDENT"Detected: %ld cores, using %d threads...\n", num_cores, num_threads);
+	
+	// Set up thread data structures.
+	ArrayList* dups = al_newc((size_t)num_vectors * 2u);
+	pthread_t* threads = mallocs(num_threads * sizeof(pthread_t));
+	WorkStruct* work = mallocs(sizeof(WorkStruct));
+	pthread_mutex_t work_mutex, list_mutex;
+	pthread_mutex_init(&work_mutex, NULL);
 	pthread_mutex_init(&list_mutex, NULL);
-
-	/* Partition i loop [0..num_vectors) into contiguous ranges for each thread. */
-	unsigned int base_chunk = num_vectors / (unsigned int)nthreads;
-	unsigned int remainder = num_vectors % (unsigned int)nthreads;
-	unsigned int cur = 0;
-	for (unsigned int t = 0; t < nthreads; t++) {
-		unsigned int chunk = base_chunk + ((t < remainder) ? 1u : 0u);
-		unsigned int start_i = cur;
-		unsigned int end_i = start_i + chunk;
-		if (end_i > num_vectors) end_i = num_vectors;
-
-		args[t].thread_id = t;
-		args[t].start_i = start_i;
-		args[t].end_i = end_i;
-		args[t].vectors = vectors;
-		args[t].num_vectors = num_vectors;
-		args[t].complete_dups = complete_dups;
-		args[t].list_mutex = &list_mutex;
-
-		pthread_create(&threads[t], NULL, complete_search_worker, &args[t]);
-
-		cur = end_i;
+	
+	// Initialize work struct.
+	work->vectors = vectors;
+	work->i = 0u;
+	work->num_vectors = num_vectors;
+	work->num_threads = num_threads;
+	work->dups = dups;
+	work->work_mutex = &work_mutex;
+	work->list_mutex = &list_mutex;
+	
+	// Spin up threads.
+	for (unsigned int t = 0; t < num_threads; t++) {
+		pthread_create(&threads[t], NULL, complete_search_worker, work);
 	}
-
-	/* Join threads. */
-	for (unsigned int t = 0; t < nthreads; t++) {
+	
+	// Join threads.
+	for (unsigned int t = 0u; t < num_threads; t++) {
+		check(fflush(stdout), "fflush(stdout)");
 		pthread_join(threads[t], NULL);
 	}
-
+	
+	// Cleanup.
+	pthread_mutex_destroy(&work_mutex);
 	pthread_mutex_destroy(&list_mutex);
 	free(threads);
-	free(args);
+	free(work);
 	
-	printf("Done!\n");
-
-	return complete_dups;
+	return dups;
 }
 
 /*** Finds duplicates using a sliding-window strategy.
@@ -1116,7 +1125,7 @@ int main(int argc, char* argv[]) {
 	// goto main_end;
 	
 	// Set buffers to only flush manually for more accurate performance evaluation.
-	setvbuf(stdout, NULL, _IOFBF, (2 * 1000 * 1000));
+	// setvbuf(stdout, NULL, _IOFBF, (2 * 1000 * 1000));
 	setvbuf(kmeans_file, NULL, _IOFBF, (4 * 1000 * 1000));
 	printf("Begin!\n");
 	
@@ -1132,8 +1141,8 @@ int main(int argc, char* argv[]) {
 	check(fflush(stdout), "fflush(stdout)");
 	
 	size_t num_dataset_sizes = sizeof(dataset_sizes) / sizeof(dataset_sizes[0]);
-	repeat (num_dataset_sizes, i) {
-		unsigned int dataset_size = dataset_sizes[i];
+	repeat (num_dataset_sizes, size_index) {
+		unsigned int dataset_size = dataset_sizes[size_index];
 		
 		// Load dataset and build vectors.
 		char** dataset = global_dataset = (char**)mallocs(dataset_size * sizeof(char*));
@@ -1143,8 +1152,8 @@ int main(int argc, char* argv[]) {
 		timer_start(timer);
 		load_dataset(path, dataset, dataset_size, false);
 		int** vectors = (int**)mallocs(dataset_size * sizeof(int*));
-		repeat (dataset_size, j) {
-			vectors[j] = build_vector(dataset[j]);
+		repeat (dataset_size, i) {
+			vectors[i] = build_vector(dataset[i]);
 		}
 		timer_stop(timer);
 		
@@ -1207,13 +1216,18 @@ int main(int argc, char* argv[]) {
 		// test_phone_search(dataset, dataset_size, timer);
 		
 		// Clean up.
-		repeat (dataset_size, j) {
-			// free(vectors[j]);
-			// free(dataset[j]);
+		repeat (dataset_size, i) {
+			free(vectors[i]);
+			free(dataset[i]);
 		}
-		// free(vectors);
-		// free(dataset);
-		// al_free(complete_dups);
+		free(vectors);
+		free(dataset);
+		repeat (complete_dups_par->size, i) {
+			free(complete_dups_par->data[i]);
+			free(complete_dups->data[i]);
+		}
+		al_free(complete_dups_par);
+		al_free(complete_dups);
 		check(fflush(stdout), "fflush(stdout)");
 	}
 	
