@@ -1,8 +1,8 @@
+#include <assert.h>
+#include <execinfo.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <signal.h>
-#include <execinfo.h>
 
 #include "utils.h"
 
@@ -64,9 +64,9 @@ void fail(const char* function_name) {
 	snprintf(error_buf, sizeof(error_buf), "kmeans.c: Fail - %s", function_name);
 	perror(error_buf);
 	
-	// Throw segfault for easier debugging.
-	fprintf(stderr, "Program will now segfault.\n");
-	raise(SIGSEGV);
+	// Throw error for easier locating in a debugger.
+	fprintf(stderr, "Program will now crash.\n");
+	assert(0);
 }
 
 /*** Helper function for compact error handling on library & system function calls.
@@ -106,9 +106,9 @@ void* mallocs(const size_t size) {
 		snprintf(error_buf, sizeof(error_buf), "kmeans.c: Fail - malloc(%lu bytes)", size);
 		perror(error_buf);
 		
-		// Throw segfault for easier debugging.
-		fprintf(stderr, "Program will now segfault.\n");
-		raise(SIGSEGV);
+		// Throw error for easier locating in a debugger.
+		fprintf(stderr, "Program will now crash.\n");
+		assert(0);
 	}
 	return memset(ptr, 0, size);
 }

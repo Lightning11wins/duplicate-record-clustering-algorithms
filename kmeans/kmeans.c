@@ -1,8 +1,12 @@
 #include <ctype.h>
 #include <float.h>
+#include <limits.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "lib/arraylist.h"
 #include "lib/timer.h"
@@ -16,8 +20,11 @@
 // Test Parameters
 unsigned int window_sizes[] = {3, 6, 16, 32, 64, 256};
 unsigned int cluster_counts[] = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
-unsigned int dataset_sizes[] = {100, 1000, 5000, 10000, 50000, 100000, 1000000, 3975429};
+unsigned int dataset_sizes[] = {1000, 10000, 100000};
 unsigned int max_iter = 64;
+// #define PATH_FORMAT "datasets/dataset_updated.txt"
+#define PATH_FORMAT "datasets/surnames_%u.txt"
+// #define PATH_FORMAT "datasets/phone_numbers_%u.txt"
 
 FILE* complete_file = NULL;
 FILE* sliding_file = NULL;
@@ -50,7 +57,6 @@ void fprint_centroid(FILE* out, const double* vector) {
 	repeat (NUM_DIMS, i) fprintf(out, " % 3g,", vector[i]);
 }
 
-// Keep an eye on this function.
 unsigned int get_char_pair_hash(unsigned int num1, unsigned int num2) {
 	double sum = (num1 * num1 * num1) + (num2 * num2 * num2);
 	double scale = ((double)num1 + 1.0) / ((double)num2 + 1.0);
@@ -429,7 +435,7 @@ void kmeans(int** vectors, unsigned int num_vectors, unsigned int* labels, doubl
  *** 
  *** @param dataset_path Path to a comma-separated file containing the dataset strings.
  ***/
-void load_dataset(const char* dataset_path, char** dataset, const unsigned int dataset_size) {
+void load_dataset(const char* dataset_path, char** dataset, const unsigned int dataset_size, bool phone) {
 	FILE *file = fopen(dataset_path, "r");
 	if (!file) {
 		char error_buf[BUFSIZ];
@@ -458,16 +464,71 @@ void load_dataset(const char* dataset_path, char** dataset, const unsigned int d
 		fprintf(stderr, "\nWarning: Expected dataset of size %u but got %ld.\n\n", dataset_size, size);
 	}
 	
-	size_t count = 0;
 	char* token = strtok(buffer, ",");
-	while (token && count < dataset_size) {
-		dataset[count++] = strdup(token);
-		token = strtok(NULL, ",");
+	for (size_t count = 0; token && count < dataset_size; token = strtok(NULL, ",")) {
+		if (phone) {
+			/** Verify length can be a valid phone number. **/
+			const size_t len = strlen(token);
+			if (len < 10u) {
+				printf("Phone number too short: %s.\n", token);
+				continue;
+			}
+			if (len > 18u) {
+				printf("Phone number too long: %s.\n", token);
+				continue;
+			}
+			
+			/** Parse phone number. **/
+			char buf[11u], cur_char = token[0];
+			unsigned int j = ((cur_char == '+') ? 2u :
+			                 ((cur_char == '1') ? 1u : 0u));
+			unsigned int number_len = 0u;
+			for (cur_char = token[j++]; cur_char != '\0' && number_len <= 10u; cur_char = token[j++]) {
+				if (
+					cur_char == '-' ||
+					cur_char == ' ' ||
+					cur_char == '(' ||
+					cur_char == ')'
+				) continue;
+				else if (!isdigit(cur_char)) {
+					/** Unknown character. **/
+					printf("Unknown character '%c' %d in phone number: %s.\n", cur_char, cur_char, token);
+					goto next_phone_number;
+				}
+				
+				/** Add the character to the phone number. */
+				buf[number_len++] = cur_char;
+			}
+			
+			/** Check number of digits. **/
+			if (number_len < 10u) {
+				printf("Phone number has %u < 10 digits: %s.\n", number_len, token);
+				continue;
+			}
+			if (number_len > 10u) {
+				printf("Phone number has %u > 10 digits: %s.\n", number_len, token);
+				continue;
+			}
+			
+			/** Copy valid phone number (with no null-terminator). **/
+			char* cur = (char*)mallocs(10u * sizeof(char*));
+			memcpy(cur, buf, 10u);
+			dataset[count++] = cur;
+			
+			next_phone_number:;
+		} else {
+			dataset[count++] = strdup(token);
+		}
 	}
 	
 	free(buffer);
 }
 
+typedef struct {
+	unsigned int i, j;
+} Dup;
+
+char** global_dataset;
 /*** Scans the entire dataset for duplicates by pairwise similarity.
  *** 
  *** This is the "complete" strategy: every pair `(i, j)` is compared and
@@ -486,17 +547,115 @@ ArrayList* find_complete_dups(int** vectors, unsigned int num_vectors) {
 		const int* v1 = vectors[i];
 		for (unsigned int j = i + 1; j < num_vectors; j++) {
 			const int* v2 = vectors[j];
-			if (sparse_similarity(v1, v2) > DUPE_THRESHOLD) {
-				al_add(complete_dups, i);
-				al_add(complete_dups, j);
+			const double sim = sparse_similarity(v1, v2);
+			if (sim > DUPE_THRESHOLD) {
+				Dup* dup = (Dup*)mallocs(sizeof(Dup));
+				dup->i = i;
+				dup->j = j;
+				al_add(complete_dups, dup);
+				// fprintf(kmeans_file, "%s,%s,%.8lf\n", global_dataset[i], global_dataset[j], sim);
 			}
 		}	
 	}
 	
-	// Lock results.
-	al_lock(complete_dups);
-	al_trim_to_size(complete_dups);
+	return complete_dups;
+}
+
+typedef struct {
+	unsigned int thread_id;
+	unsigned int start_i; // inclusive
+	unsigned int end_i;   // exclusive
+	int** vectors;
+	unsigned int num_vectors;
+	ArrayList* complete_dups;
+	pthread_mutex_t* list_mutex;
+} WorkerArg;
+
+static void* complete_search_worker(void* argp) {
+	// Extract variables.
+	WorkerArg* arg = (WorkerArg*)argp;
+	int** vectors = arg->vectors;
+	const unsigned int num_vectors = arg->num_vectors;
+	const unsigned int start_i = arg->start_i;
+	const unsigned int end_i = arg->end_i;
+	ArrayList* complete_dups = arg->complete_dups;
+	pthread_mutex_t* list_mutex = arg->list_mutex;
 	
+	for (unsigned int i = start_i; i < end_i; i++) {
+		const int* v1 = vectors[i];
+		for (unsigned int j = i + 1; j < num_vectors; j++) {
+			const int* v2 = vectors[j];
+			const double sim = sparse_similarity(v1, v2);
+			if (sim > DUPE_THRESHOLD) {
+				Dup* dup = (Dup*)mallocs(sizeof(Dup));
+				dup->i = i;
+				dup->j = j;
+				
+				pthread_mutex_lock(list_mutex);
+				al_add(complete_dups, dup);
+				// if (kmeans_file) {
+				// 	fprintf(kmeans_file, "%s,%s,%lf\n",
+				// 		global_dataset[i], global_dataset[j], sim);
+				// }
+				pthread_mutex_unlock(list_mutex);
+			}
+		}
+	}
+	return NULL;
+}
+
+ArrayList* find_complete_dups_par(int** vectors, unsigned int num_vectors) {
+	/* Create result list with same initial capacity as original code. */
+	ArrayList* complete_dups = al_newc((size_t)num_vectors * 2u);
+
+	/* Determine number of threads = number of CPU cores, at least 1, but not
+		more than num_vectors (no point in creating more threads than work). */
+	long ncores = sysconf(_SC_NPROCESSORS_ONLN);
+	if (ncores < 1) ncores = 1;
+	unsigned int nthreads = (unsigned int)ncores;
+	if (nthreads > num_vectors) nthreads = num_vectors;
+	if (nthreads < 1) nthreads = 1;
+	printf(INDENT"Detected: %ld cores, using %d threads... ", ncores, nthreads);
+
+	pthread_t* threads = mallocs(sizeof(pthread_t) * nthreads);
+	WorkerArg* args = mallocs(sizeof(WorkerArg) * nthreads);
+	pthread_mutex_t list_mutex;
+	pthread_mutex_init(&list_mutex, NULL);
+
+	/* Partition i loop [0..num_vectors) into contiguous ranges for each thread. */
+	unsigned int base_chunk = num_vectors / (unsigned int)nthreads;
+	unsigned int remainder = num_vectors % (unsigned int)nthreads;
+	unsigned int cur = 0;
+	for (unsigned int t = 0; t < nthreads; t++) {
+		unsigned int chunk = base_chunk + ((t < remainder) ? 1u : 0u);
+		unsigned int start_i = cur;
+		unsigned int end_i = start_i + chunk;
+		if (end_i > num_vectors) end_i = num_vectors;
+
+		args[t].thread_id = t;
+		args[t].start_i = start_i;
+		args[t].end_i = end_i;
+		args[t].vectors = vectors;
+		args[t].num_vectors = num_vectors;
+		args[t].complete_dups = complete_dups;
+		args[t].list_mutex = &list_mutex;
+
+		pthread_create(&threads[t], NULL, complete_search_worker, &args[t]);
+
+		cur = end_i;
+	}
+
+	/* Join threads. */
+	for (unsigned int t = 0; t < nthreads; t++) {
+		pthread_join(threads[t], NULL);
+	}
+
+	pthread_mutex_destroy(&list_mutex);
+	free(threads);
+	free(args);
+	
+	printf("Done!\n");
+
 	return complete_dups;
 }
 
@@ -521,8 +680,10 @@ ArrayList* find_sliding_dups(int** vectors, unsigned int num_vectors, const unsi
 		for (unsigned int j = i + 1; j < j_max; j++) {
 			const int* v2 = vectors[j];
 			if (sparse_similarity(v1, v2) > DUPE_THRESHOLD) {
-				al_add(sliding_dups, i);
-				al_add(sliding_dups, j);
+				Dup* dup = (Dup*)mallocs(sizeof(Dup));
+				dup->i = i;
+				dup->j = j;
+				al_add(sliding_dups, dup);
 			}
 		}
 	}
@@ -593,8 +754,10 @@ ArrayList* find_kmeans_dups(int** vectors, unsigned int num_vectors, unsigned in
 				if (labels[j] != label) continue;
 				const int* v2 = vectors[j];
 				if (sparse_similarity(v1, v2) > DUPE_THRESHOLD) {
-					al_add(kmeans_dups, i);
-					al_add(kmeans_dups, j);
+					Dup* dup = (Dup*)mallocs(sizeof(Dup));
+					dup->i = i;
+					dup->j = j;
+					al_add(kmeans_dups, dup);
 				}
 			}
 		}
@@ -627,18 +790,25 @@ ArrayList* find_kmeans_dups(int** vectors, unsigned int num_vectors, unsigned in
 	return kmeans_dups;
 }
 
-ArrayList* test_complete_search(int** vectors, unsigned int num_vectors, Timer* timer) {
+ArrayList* test_complete_search(int** vectors, unsigned int num_vectors, bool par, Timer* timer) {
 	// Flush buffers to reduce flush overhead during benchmark.
-	printf("\nComplete search on %u records:\n", num_vectors);
+	printf("\nComplete search %son %u records:\n", (par) ? "(in parallel) " : "", num_vectors);
 	check(fflush(stdout), "fflush(stdout)");
 	
 	// Execute the complete search dupe detection.
 	timer_benchmark(timer,
-		ArrayList* complete_dups = find_complete_dups(vectors, num_vectors);
+		ArrayList* complete_dups = (par)
+			? find_complete_dups_par(vectors, num_vectors)
+			: find_complete_dups(vectors, num_vectors);
 	);
+	check(fflush(stdout), "fflush(stdout)");
+	
+	// Lock results.
+	al_lock(complete_dups);
+	al_trim_to_size(complete_dups);
 	
 	// Print complete search summary.
-	printf(INDENT"Dups: %ld\n", complete_dups->size / 2);
+	printf(INDENT"Dups: %ld\n", complete_dups->size);
 	printf(INDENT"Time: %.4lfs\n", timer_store(timer));
 	check(fflush(stdout), "fflush(stdout)");
 	
@@ -663,7 +833,7 @@ void test_sliding_search(int** vectors, unsigned int num_vectors, Timer* timer, 
 		
 		// Print sliding summary.
 		double percent_success_sliding = 100.0 * (double)sliding_dups->size / (double)complete_dups->size;
-		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", sliding_dups->size / 2, complete_dups->size / 2, percent_success_sliding);
+		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", sliding_dups->size, complete_dups->size, percent_success_sliding);
 		const double time_percent = 100.0f * sliding_time / timer->stored_duration;
 		printf(INDENT"Time: %.4lfs (%%%.2f)\n", sliding_time, time_percent);
 		check(fflush(stdout), "fflush(stdout)");
@@ -691,10 +861,10 @@ void test_kmeans_search(int** vectors, unsigned int num_vectors, unsigned int* c
 	
 		// Print sliding summary.
 		const double time_percent = 100.0f * kmeans_time / timer->stored_duration;
-		const double percent_success_kmeans = 100.0 * (double)kmeans_dups->size / (2.0 * (double)complete_dups->size / 2);
+		const double percent_success_kmeans = 100.0 * (double)kmeans_dups->size / (double)complete_dups->size;
 		printf(INDENT"Time: %.4lfs (%%%.2f)\n", kmeans_time, time_percent);
 		printf(INDENT"Iterations: %u/%u\n", iterations, max_iter);
-		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", kmeans_dups->size / 2, complete_dups->size / 2, percent_success_kmeans);
+		printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", kmeans_dups->size, complete_dups->size, percent_success_kmeans);
 		check(fflush(stdout), "fflush(stdout)");
 		
 		// Free memory.
@@ -734,10 +904,120 @@ void test_lightning_search(int** vectors, unsigned int num_vectors, Timer* timer
 	// Print summary.
 	const double time = timer_get(timer);
 	const double time_percent = 100.0f * time / timer->stored_duration;
-	const double percent_success = 100.0 * (double)num_dups / (2.0 * (double)complete_dups->size / 2);
+	const double percent_success = 100.0 * (double)num_dups / (double)complete_dups->size;
 	printf(INDENT"Time: %.4lfs (%%%.2f)\n", time, time_percent);
-	printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", num_dups / 2, complete_dups->size / 2, percent_success);
+	printf(INDENT"Dups: %ld/%ld (%%%.2lf)\n", num_dups, complete_dups->size, percent_success);
 	check(fflush(stdout), "fflush(stdout)");
+}
+
+#define PHONE_LEN 10u
+unsigned int exp_fn_edit_dist(const char* str1, const char* str2)
+    {
+    /*** lev_matrix:
+     *** For all i and j, d[i][j] will hold the Levenshtein distance between
+     *** the first i characters of s and the first j characters of t.
+     *** 
+     *** As they say, no dynamic programming algorithm is complete without a
+     *** matrix that you fill out and it has the answer in the final location.
+     ***/
+    unsigned int lev_matrix[PHONE_LEN + 1][PHONE_LEN + 1];
+    
+    /*** Base case #0:
+     *** Transforming an empty string into an empty string has 0 cost.
+     ***/
+    lev_matrix[0][0] = 0u;
+    
+    /*** Base case #1:
+     *** Any source prefixe can be transformed into an empty string by
+     *** dropping each character.
+     ***/
+    for (unsigned int i = 1u; i <= PHONE_LEN; i++)
+		lev_matrix[i][0] = i;
+    
+    /*** Base case #2:
+     *** Any target prefixes can be transformed into an empty string by
+     *** inserting each character.
+     ***/
+    for (unsigned int j = 1u; j <= PHONE_LEN; j++)
+		lev_matrix[0][j] = j;
+    
+    /** General Case **/
+    for (unsigned int i = 1u; i <= PHONE_LEN; i++)
+	{
+	for (unsigned int j = 1u; j <= PHONE_LEN; j++)
+	    {
+	    /** Equal characters need no changes. **/
+	    if (str1[i - 1] == str2[j - 1])
+		lev_matrix[i][j] = lev_matrix[i - 1][j - 1];
+	    
+	    /*** We need to make a change, so use the opereration with the
+	     *** lowest cost out of delete, insert, replace, or swap.
+	     ***/
+	    else 
+		{
+		unsigned int cost_delete  = lev_matrix[i - 1][j] + 1u;
+		unsigned int cost_insert  = lev_matrix[i][j - 1] + 1u;
+		unsigned int cost_replace = lev_matrix[i-1][j-1] + 1u;
+		
+		/** If a swap is possible, calculate the cost. **/
+		bool can_swap = (
+		    i > 1 && j > 1 &&
+		    str1[i - 1] == str2[j - 2] &&
+		    str1[i - 2] == str2[j - 1]
+		);
+		unsigned int cost_swap = (can_swap) ? lev_matrix[i - 2][j - 2] + 1 : UINT_MAX;
+		
+		// Find the best operation.
+		lev_matrix[i][j] = min(min(min(cost_delete, cost_insert), cost_replace), cost_swap);
+		}
+	    }
+	}
+    
+    return lev_matrix[PHONE_LEN][PHONE_LEN];
+    }
+
+ArrayList* find_phone_dups(char** strs, unsigned int num_vectors) {
+	ArrayList* phone_dups = al_newc(num_vectors * 2u);
+	repeat (num_vectors, i) {
+		const char* str1 = strs[i];
+		for (unsigned int j = i + 1; j < num_vectors; j++) {
+			const char* str2 = strs[j];
+			const double sim = (double)(10u - exp_fn_edit_dist(str1, str2)) / 10.0;
+			if (sim > DUPE_THRESHOLD) {
+				Dup* dup = (Dup*)mallocs(sizeof(Dup));
+				dup->i = i;
+				dup->j = j;
+				al_add(phone_dups, dup);
+				fprintf(kmeans_file, "%s,%s,%lf\n", str1, str2, sim);
+			}
+		}	
+	}
+	
+	return phone_dups;
+}
+
+ArrayList* test_phone_search(char** strs, unsigned int num_strs, Timer* timer) {
+	// Flush buffers to reduce flush overhead during benchmark.
+	printf("\nPhone search on %u records:\n", num_strs);
+	check(fflush(stdout), "fflush(stdout)");
+	
+	// Execute the complete search dupe detection.
+	fflush(kmeans_file);
+	timer_benchmark(timer,
+		ArrayList* phone_dups = find_phone_dups(strs, num_strs);
+	);
+	fflush(kmeans_file);
+	
+	// Lock results.
+	al_lock(phone_dups);
+	al_trim_to_size(phone_dups);
+	
+	// Print complete search summary.
+	printf(INDENT"Dups: %ld\n", phone_dups->size);
+	printf(INDENT"Time: %.4lfs\n", timer_store(timer));
+	check(fflush(stdout), "fflush(stdout)");
+	
+	return phone_dups;
 }
 
 double cmp_sim(const char* str1, const char* str2) {
@@ -754,41 +1034,52 @@ double cmp_sim(const char* str1, const char* str2) {
 	return dif;
 }
 
-void test_sims() {
-	unsigned int num_records = 4;
-	static char* data[][6] = {
-        {"John", "JHAN", "Smith", "SM0XMT", "JohnSmith", "1284 Lecross Street 58214"},
-        {"Jain", "JHAN", "Schmid", "XMTSMT", "JainDoe", "3614 Feron Place 62841"},
-        {"Bart", "PRT", "Smith", "SM0XMT", "ImOnTopOfTheWorldYeah", "1284 Lecross Street 58214"},
-        {"John", "JHAN", "Smith", "SM0XMT", "JohnSmtih", "1283 Lekroce Streat 58124"},
-    };
-	char*** dataset = (char***)data;
+// void test_sims(void) {
+// 	unsigned int num_records = 4;
+// 	static char* data[][6] = {
+//         {"John", "JHAN", "Smith", "SM0XMT", "JohnSmith", "1284 Lecross Street 58214"},
+//         {"Jain", "JHAN", "Schmid", "XMTSMT", "JainDoe", "3614 Feron Place 62841"},
+//         {"Bart", "PRT", "Smith", "SM0XMT", "ImOnTopOfTheWorldYeah", "1284 Lecross Street 58214"},
+//         {"John", "JHAN", "Smith", "SM0XMT", "JohnSmtih", "1283 Lekroce Streat 58124"},
+//     };
+// 	char*** dataset = (char***)data;
 	
-	repeat (num_records, i) repeat (i, j) {
-		double fname  = cmp_sim(data[i][0], data[j][0]);
-		double fnamem = cmp_sim(data[i][1], data[j][1]);
-		double lname  = cmp_sim(data[i][2], data[j][2]);
-		double lnamem = cmp_sim(data[i][3], data[j][3]);
-		double email  = cmp_sim(data[i][4], data[j][4]);
-		double addr   = cmp_sim(data[i][5], data[j][5]);
+// 	repeat (num_records, i) repeat (i, j) {
+// 		double fname  = cmp_sim(data[i][0], data[j][0]);
+// 		double fnamem = cmp_sim(data[i][1], data[j][1]);
+// 		double lname  = cmp_sim(data[i][2], data[j][2]);
+// 		double lnamem = cmp_sim(data[i][3], data[j][3]);
+// 		double email  = cmp_sim(data[i][4], data[j][4]);
+// 		double addr   = cmp_sim(data[i][5], data[j][5]);
 		
-		double fname_ag = max(fname, fnamem * 0.9);
-		double lname_ag = max(lname, lnamem * 0.9);
+// 		double fname_ag = max(fname, fnamem * 0.9);
+// 		double lname_ag = max(lname, lnamem * 0.9);
 		
-		#define s(n) n * n
-		double ave = (fname_ag + lname_ag + email + addr) / 4.0;
-		double smt = (fname_ag * lname_ag) * 0.6 + email * 0.2 + addr * 0.2;
+// 		double ave = (fname_ag + lname_ag + email + addr) / 4.0;
+// 		double smt = (fname_ag * lname_ag) * 0.6 + email * 0.2 + addr * 0.2;
 		
-		printf(
-			"%s %s =? %s %s -> %lf %lf\n",
-			data[j][0], data[j][2], data[i][0], data[i][2],
-			ave, smt
-		);
-		printf(
-			INDENT"%lf (%lf), %lf (%lf), %lf, %lf\n",
-			fname, fnamem, lname, lnamem, email, addr
-		);
-	}
+// 		printf(
+// 			"%s %s =? %s %s -> %lf %lf\n",
+// 			data[j][0], data[j][2], data[i][0], data[i][2],
+// 			ave, smt
+// 		);
+// 		printf(
+// 			INDENT"%lf (%lf), %lf (%lf), %lf, %lf\n",
+// 			fname, fnamem, lname, lnamem, email, addr
+// 		);
+// 	}
+// }
+
+int dup_cmp(const void *pa, const void *pb) {
+	// pa and pb are pointers to elements in the array; each element is a Dup*.
+    const Dup* a = *(const Dup* const*)pa;
+    const Dup* b = *(const Dup* const*)pb;
+
+	if (a->i < b->i) return -1;
+	if (a->i > b->i) return  1;
+	if (a->j < b->j) return -1;
+	if (a->j > b->j) return  1;
+	return 0;
 }
 
 /*** Program entry point: runs various tests and reports results.
@@ -821,8 +1112,8 @@ int main(int argc, char* argv[]) {
 	Timer* timer_total = timer_new();
 	timer_start(timer_total);
 	
-	test_sims();
-	goto main_end;
+	// printf("similarity: %lf", cmp_sim("error","undefined"));
+	// goto main_end;
 	
 	// Set buffers to only flush manually for more accurate performance evaluation.
 	setvbuf(stdout, NULL, _IOFBF, (2 * 1000 * 1000));
@@ -845,12 +1136,12 @@ int main(int argc, char* argv[]) {
 		unsigned int dataset_size = dataset_sizes[i];
 		
 		// Load dataset and build vectors.
-		char** dataset = (char**)mallocs(dataset_size * sizeof(char*));
+		char** dataset = global_dataset = (char**)mallocs(dataset_size * sizeof(char*));
 		char path[BUFSIZ];
-		snprintf(path, sizeof(path), "datasets/surnames_%u.txt", dataset_size);
+		snprintf(path, sizeof(path), PATH_FORMAT, dataset_size);
 		
 		timer_start(timer);
-		load_dataset(path, dataset, dataset_size);
+		load_dataset(path, dataset, dataset_size, false);
 		int** vectors = (int**)mallocs(dataset_size * sizeof(int*));
 		repeat (dataset_size, j) {
 			vectors[j] = build_vector(dataset[j]);
@@ -864,28 +1155,67 @@ int main(int argc, char* argv[]) {
 		check(fflush(stdout), "fflush(stdout)");
 		
 		// Complete search.
-		ArrayList* complete_dups = (dataset_size <= 50000)
-			? test_complete_search(vectors, dataset_size, timer)
+		ArrayList* complete_dups_par = (dataset_size <= 100000)
+			? test_complete_search(vectors, dataset_size, true, timer)
 			: al_new();
+			
+		ArrayList* complete_dups = (dataset_size <= 100000)
+			? test_complete_search(vectors, dataset_size, false, timer)
+			: al_new();
+		
+		printf("\n");
+		bool success = true;
+		if (complete_dups_par->size != complete_dups->size) {
+			success = false;
+			printf("Size mismatch: %lu, but should be %lu.\n", complete_dups_par->size, complete_dups->size);
+			check(fflush(stdout), "fflush(stdout)");
+		}
+		
+		printf("Sorting...\n");
+		check(fflush(stdout), "fflush(stdout)");
+		al_sort(complete_dups_par, dup_cmp);
+		al_sort(complete_dups, dup_cmp);
+		
+		for (size_t i = 0u; i < complete_dups_par->size; i++) {
+			const unsigned int pari = ((Dup*)complete_dups_par->data[i])->i;
+			const unsigned int parj = ((Dup*)complete_dups_par->data[i])->j;
+			const unsigned int cori = ((Dup*)complete_dups->data[i])->i;
+			const unsigned int corj = ((Dup*)complete_dups->data[i])->j;
+			
+			if (pari != cori || parj != corj) {
+				success = false;
+			    printf("Value mismatch: (%u, %u) #%lu should be (%u, %u).\n", pari, parj, i, cori, corj);
+			    check(fflush(stdout), "fflush(stdout)");
+			}
+		}
+		
+		if (success) {
+			printf("Success!\n");
+			check(fflush(stdout), "fflush(stdout)");
+		} else {
+			printf("Failure!\n");
+			check(fflush(stdout), "fflush(stdout)");
+		}
 
 		// Sliding search.
-		test_sliding_search(vectors, dataset_size, timer, complete_dups);
+		// test_sliding_search(vectors, dataset_size, timer, complete_dups);
 		
 		// Lightning search.
-		test_lightning_search(vectors, dataset_size, timer, complete_dups);
+		// test_lightning_search(vectors, dataset_size, timer, complete_dups);
+		
+		// Phone search.
+		// test_phone_search(dataset, dataset_size, timer);
 		
 		// Clean up.
 		repeat (dataset_size, j) {
-			free(vectors[j]);
-			free(dataset[j]);
+			// free(vectors[j]);
+			// free(dataset[j]);
 		}
-		free(vectors);
-		free(dataset);
-		al_free(complete_dups);
+		// free(vectors);
+		// free(dataset);
+		// al_free(complete_dups);
 		check(fflush(stdout), "fflush(stdout)");
 	}
-	
-	main_end:
 	
 	// Print the total execution time.
 	timer_stop(timer_total);
